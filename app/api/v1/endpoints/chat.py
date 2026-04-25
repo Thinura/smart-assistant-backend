@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, HTTPException, status
 
 from app.agents.graph import chat_graph
+from app.agents.intents import AgentIntent
 from app.api.deps import DbSession
 from app.models.agent_run import AgentRun, AgentRunStatus
 from app.models.conversation import Conversation
@@ -31,6 +32,7 @@ def create_chat_message(
         input_message=payload.message,
         run_metadata={
             "provider": "ollama",
+            "model": "langchain_ollama",
             "mode": "langgraph_chat",
             "graph": "chat_graph",
         },
@@ -45,6 +47,7 @@ def create_chat_message(
             {
                 "conversation_id": payload.conversation_id,
                 "user_message": payload.message,
+                "intent": AgentIntent.UNKNOWN,
                 "assistant_message": None,
                 "error": None,
             }
