@@ -1,0 +1,62 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Build/package files
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Poetry
+poetry.lock
+
+# Logs
+*.log
+logs/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Docker/local volumes
+docker-data/
+postgres_data/
+redis_data/
+minio_data/
+
+# Uploaded/local files
+uploads/
+storage/
+tmp/
+temp/
+
+# Test reports
+reports/
+junit.xml
+
+# OS files
+Thumbs.db
+Desktop.ini
