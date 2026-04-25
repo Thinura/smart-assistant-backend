@@ -2,12 +2,12 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, HTTPException, status
 
+from app.agents.graph import chat_graph
 from app.api.deps import DbSession
 from app.models.agent_run import AgentRun, AgentRunStatus
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.llm_service import LLMService
 
 router = APIRouter()
 
@@ -31,7 +31,8 @@ def create_chat_message(
         input_message=payload.message,
         run_metadata={
             "provider": "ollama",
-            "mode": "chat",
+            "mode": "langgraph_chat",
+            "graph": "chat_graph",
         },
     )
 
@@ -40,16 +41,19 @@ def create_chat_message(
     db.refresh(agent_run)
 
     try:
-        prompt = f"""
-You are Smart Assistant, a helpful AI assistant for agentic AI and recruitment workflows.
-Answer clearly and concisely.
+        result = chat_graph.invoke(
+            {
+                "conversation_id": payload.conversation_id,
+                "user_message": payload.message,
+                "assistant_message": None,
+                "error": None,
+            }
+        )
 
-User message:
-{payload.message}
-"""
+        assistant_text = result["assistant_message"]
 
-        llm_service = LLMService()
-        assistant_text = llm_service.generate_response(prompt)
+        if assistant_text is None:
+            raise RuntimeError("Agent did not generate a response")
 
         user_message = Message(
             conversation_id=payload.conversation_id,
