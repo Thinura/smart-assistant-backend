@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.v1.endpoints.agent_runs import router as agent_runs_router
 from app.api.v1.endpoints.chat import router as chat_router
 from app.api.v1.endpoints.conversations import router as conversations_router
 from app.api.v1.endpoints.health import router as health_router
@@ -22,4 +23,10 @@ api_router.include_router(
     chat_router,
     prefix="/chat",
     tags=["Chat"],
+)
+
+api_router.include_router(
+    agent_runs_router,
+    prefix="/agent-runs",
+    tags=["Agent Runs"],
 )

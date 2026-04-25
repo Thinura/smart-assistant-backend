@@ -10,5 +10,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     conversation_id: UUID
+    agent_run_id: UUID
     user_message: str
     assistant_message: str

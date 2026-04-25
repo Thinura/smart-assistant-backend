@@ -1,6 +1,9 @@
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import DbSession
+from app.models.agent_run import AgentRun, AgentRunStatus
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.schemas.chat import ChatRequest, ChatResponse
@@ -22,36 +25,67 @@ def create_chat_message(
             detail="Conversation not found",
         )
 
-    user_message = Message(
+    agent_run = AgentRun(
         conversation_id=payload.conversation_id,
-        role=MessageRole.USER,
-        content=payload.message,
+        status=AgentRunStatus.RUNNING,
+        input_message=payload.message,
+        run_metadata={
+            "provider": "ollama",
+            "mode": "chat",
+        },
     )
 
-    llm_service = LLMService()
-
-    prompt = f"""
-    You are Smart Assistant, an agentic AI assistant for recruitment and HR workflows.
-    Answer clearly and professionally.
-
-    User message:
-    {payload.message}
-    """
-
-    assistant_text = llm_service.generate_response(prompt)
-    
-    assistant_message = Message(
-        conversation_id=payload.conversation_id,
-        role=MessageRole.ASSISTANT,
-        content=assistant_text,
-    )
-
-    db.add(user_message)
-    db.add(assistant_message)
+    db.add(agent_run)
     db.commit()
+    db.refresh(agent_run)
 
-    return ChatResponse(
-        conversation_id=payload.conversation_id,
-        user_message=payload.message,
-        assistant_message=assistant_text,
-    )
+    try:
+        prompt = f"""
+You are Smart Assistant, a helpful AI assistant for agentic AI and recruitment workflows.
+Answer clearly and concisely.
+
+User message:
+{payload.message}
+"""
+
+        llm_service = LLMService()
+        assistant_text = llm_service.generate_response(prompt)
+
+        user_message = Message(
+            conversation_id=payload.conversation_id,
+            role=MessageRole.USER,
+            content=payload.message,
+        )
+
+        assistant_message = Message(
+            conversation_id=payload.conversation_id,
+            role=MessageRole.ASSISTANT,
+            content=assistant_text,
+        )
+
+        agent_run.status = AgentRunStatus.COMPLETED
+        agent_run.output_message = assistant_text
+        agent_run.completed_at = datetime.now(UTC)
+
+        db.add(user_message)
+        db.add(assistant_message)
+        db.commit()
+
+        return ChatResponse(
+            conversation_id=payload.conversation_id,
+            agent_run_id=agent_run.id,
+            user_message=payload.message,
+            assistant_message=assistant_text,
+        )
+
+    except Exception as exc:
+        agent_run.status = AgentRunStatus.FAILED
+        agent_run.error_message = str(exc)
+        agent_run.completed_at = datetime.now(UTC)
+
+        db.commit()
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Failed to generate assistant response",
+        ) from exc

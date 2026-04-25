@@ -35,35 +35,22 @@ def list_conversations(
 
 
 @router.get("/{conversation_id}/messages", response_model=list[MessageResponse])
-
 def list_conversation_messages(
-
     conversation_id: str,
-
     db: DbSession,
-
 ) -> list[Message]:
 
     conversation = db.get(Conversation, conversation_id)
 
     if conversation is None:
-
         raise HTTPException(
-
             status_code=status.HTTP_404_NOT_FOUND,
-
             detail="Conversation not found",
-
         )
 
     return (
-
         db.query(Message)
-
         .filter(Message.conversation_id == conversation_id)
-
         .order_by(Message.created_at.asc())
-
         .all()
-
     )
