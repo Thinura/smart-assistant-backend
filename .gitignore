@@ -46,6 +46,7 @@ docker-data/
 postgres_data/
 redis_data/
 minio_data/
+ollama_data/
 
 # Uploaded/local files
 uploads/

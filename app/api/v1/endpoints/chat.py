@@ -4,6 +4,7 @@ from app.api.deps import DbSession
 from app.models.conversation import Conversation
 from app.models.message import Message, MessageRole
 from app.schemas.chat import ChatRequest, ChatResponse
+from app.services.llm_service import LLMService
 
 router = APIRouter()
 
@@ -27,8 +28,18 @@ def create_chat_message(
         content=payload.message,
     )
 
-    assistant_text = f"Received your message: {payload.message}"
+    llm_service = LLMService()
 
+    prompt = f"""
+    You are Smart Assistant, an agentic AI assistant for recruitment and HR workflows.
+    Answer clearly and professionally.
+
+    User message:
+    {payload.message}
+    """
+
+    assistant_text = llm_service.generate_response(prompt)
+    
     assistant_message = Message(
         conversation_id=payload.conversation_id,
         role=MessageRole.ASSISTANT,
