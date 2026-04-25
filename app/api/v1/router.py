@@ -4,6 +4,7 @@ from app.api.v1.endpoints.agent_runs import router as agent_runs_router
 from app.api.v1.endpoints.chat import router as chat_router
 from app.api.v1.endpoints.conversations import router as conversations_router
 from app.api.v1.endpoints.health import router as health_router
+from app.api.v1.endpoints.tools import router as tools_router
 
 api_router = APIRouter()
 
@@ -29,4 +30,10 @@ api_router.include_router(
     agent_runs_router,
     prefix="/agent-runs",
     tags=["Agent Runs"],
+)
+
+api_router.include_router(
+    tools_router,
+    prefix="/tools",
+    tags=["Tools"],
 )
