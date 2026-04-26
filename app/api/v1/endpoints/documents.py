@@ -11,6 +11,7 @@ from app.schemas.document import DocumentResponse
 from app.schemas.document_chunk import DocumentChunkResponse
 from app.services.document_chunking_service import DocumentChunkingService
 from app.services.document_text_extraction_service import DocumentTextExtractionService
+from app.services.embedding_service import EmbeddingService
 
 router = APIRouter()
 
@@ -70,12 +71,17 @@ async def upload_document(
         chunking_service = DocumentChunkingService()
         chunks = chunking_service.split_text(extracted_text)
 
+        embedding_service = EmbeddingService()
+
         for index, chunk in enumerate(chunks):
+            embedding = embedding_service.generate_embedding(chunk)
+
             db.add(
                 DocumentChunk(
                     document_id=document.id,
                     chunk_index=index,
                     content=chunk,
+                    embedding=embedding,
                 )
             )
 
