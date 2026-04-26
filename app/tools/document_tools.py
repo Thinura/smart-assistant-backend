@@ -30,9 +30,7 @@ class SearchDocumentsTool(BaseTool):
 
         query_embedding = self.embedding_service.generate_embedding(query)
 
-        similarity_score = DocumentChunk.embedding.cosine_distance(query_embedding).label(
-            "distance"
-        )
+        distance = DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
 
         statement = (
             select(
@@ -41,11 +39,11 @@ class SearchDocumentsTool(BaseTool):
                 DocumentChunk.chunk_index,
                 DocumentChunk.content,
                 Document.original_filename,
-                similarity_score,
+                distance,
             )
             .join(Document, Document.id == DocumentChunk.document_id)
             .where(DocumentChunk.embedding.is_not(None))
-            .order_by(similarity_score)
+            .order_by(distance)
             .limit(top_k)
         )
 

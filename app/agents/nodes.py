@@ -88,7 +88,7 @@ def handle_document_qa_placeholder(state: AgentState) -> AgentState:
             return {
                 **state,
                 "tool_results": [*existing_tool_results, tool_result],
-                "assistant_message": ("I could not search the uploaded documents right now."),
+                "assistant_message": "I could not search the uploaded documents right now.",
             }
 
         results = result.data.get("results", [])
@@ -112,8 +112,8 @@ def handle_document_qa_placeholder(state: AgentState) -> AgentState:
             SystemMessage(
                 content=(
                     "You are Smart Assistant. Answer the user's question using only "
-                    "the provided document context. If the answer is not in the context, "
-                    "say you could not find it in the uploaded documents."
+                    "the provided document context. If the answer is not available "
+                    "in the context, say you could not find it in the uploaded documents."
                 )
             ),
             HumanMessage(
