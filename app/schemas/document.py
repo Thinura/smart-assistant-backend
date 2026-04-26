@@ -12,6 +12,7 @@ class DocumentResponse(BaseModel):
     storage_path: str
     content_type: str
     file_size: int
+    extracted_text: str | None
     document_type: DocumentType
     status: DocumentStatus
     created_at: datetime

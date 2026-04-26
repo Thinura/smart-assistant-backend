@@ -1,23 +1,21 @@
 from pathlib import Path
 from typing import Annotated
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.api.deps import DbSession
-from app.models.document import Document, DocumentType
+from app.models.document import Document, DocumentStatus, DocumentType
+from app.models.document_chunk import DocumentChunk
 from app.schemas.document import DocumentResponse
+from app.schemas.document_chunk import DocumentChunkResponse
+from app.services.document_chunking_service import DocumentChunkingService
+from app.services.document_text_extraction_service import DocumentTextExtractionService
 
 router = APIRouter()
 
 UPLOAD_DIR = Path("storage/documents")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-ALLOWED_CONTENT_TYPES = {
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "text/plain",
-}
 
 
 @router.post(
@@ -30,10 +28,15 @@ async def upload_document(
     file: Annotated[UploadFile, File()],
     document_type: Annotated[DocumentType, Form()] = DocumentType.GENERAL,
 ) -> Document:
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
+    text_extraction_service = DocumentTextExtractionService()
+
+    if not text_extraction_service.is_supported(file.content_type):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file type. Supported types are PDF, DOCX, and TXT.",
+            detail=(
+                "Unsupported file type. Supported types are: "
+                f"{', '.join(sorted(text_extraction_service.supported_content_types))}"
+            ),
         )
 
     file_bytes = await file.read()
@@ -56,6 +59,39 @@ async def upload_document(
     db.commit()
     db.refresh(document)
 
+    try:
+        extracted_text = text_extraction_service.extract_text(
+            file_path=document.storage_path,
+            content_type=document.content_type,
+        )
+
+        document.extracted_text = extracted_text
+        document.status = DocumentStatus.PROCESSED
+        chunking_service = DocumentChunkingService()
+        chunks = chunking_service.split_text(extracted_text)
+
+        for index, chunk in enumerate(chunks):
+            db.add(
+                DocumentChunk(
+                    document_id=document.id,
+                    chunk_index=index,
+                    content=chunk,
+                )
+            )
+
+    except Exception as exc:
+        document.status = DocumentStatus.FAILED
+
+        document.extracted_text = None
+
+        db.commit()
+
+        raise RuntimeError(f"Failed to extract document text: {exc}") from exc
+
+    db.commit()
+
+    db.refresh(document)
+
     return document
 
 
@@ -64,3 +100,16 @@ def list_documents(
     db: DbSession,
 ) -> list[Document]:
     return db.query(Document).order_by(Document.created_at.desc()).all()
+
+
+@router.get("/{document_id}/chunks", response_model=list[DocumentChunkResponse])
+def list_document_chunks(
+    document_id: UUID,
+    db: DbSession,
+) -> list[DocumentChunk]:
+    return (
+        db.query(DocumentChunk)
+        .filter(DocumentChunk.document_id == document_id)
+        .order_by(DocumentChunk.chunk_index.asc())
+        .all()
+    )
