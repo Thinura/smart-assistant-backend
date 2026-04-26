@@ -7,7 +7,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from app.api.deps import DbSession
 from app.models.document import Document, DocumentStatus, DocumentType
 from app.models.document_chunk import DocumentChunk
-from app.schemas.document import DocumentResponse
+from app.schemas.document import DocumentDetailResponse, DocumentListResponse
 from app.schemas.document_chunk import DocumentChunkResponse
 from app.services.document_chunking_service import DocumentChunkingService
 from app.services.document_text_extraction_service import DocumentTextExtractionService
@@ -19,9 +19,16 @@ UPLOAD_DIR = Path("storage/documents")
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
+@router.get("", response_model=list[DocumentListResponse])
+def list_documents(
+    db: DbSession,
+) -> list[Document]:
+    return db.query(Document).order_by(Document.created_at.desc()).all()
+
+
 @router.post(
     "/upload",
-    response_model=DocumentResponse,
+    response_model=DocumentDetailResponse,
     status_code=status.HTTP_201_CREATED,
 )
 async def upload_document(
@@ -101,11 +108,20 @@ async def upload_document(
     return document
 
 
-@router.get("", response_model=list[DocumentResponse])
-def list_documents(
+@router.get("/{document_id}", response_model=DocumentDetailResponse)
+def get_document(
+    document_id: UUID,
     db: DbSession,
-) -> list[Document]:
-    return db.query(Document).order_by(Document.created_at.desc()).all()
+) -> Document:
+    document = db.get(Document, document_id)
+
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found",
+        )
+
+    return document
 
 
 @router.get("/{document_id}/chunks", response_model=list[DocumentChunkResponse])
