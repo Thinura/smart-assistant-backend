@@ -57,7 +57,7 @@ def generate_general_response(state: AgentState) -> AgentState:
     }
 
 
-def handle_document_qa_placeholder(state: AgentState) -> AgentState:
+def handle_document_qa(state: AgentState) -> AgentState:
     from app.db.session import SessionLocal
 
     db = SessionLocal()

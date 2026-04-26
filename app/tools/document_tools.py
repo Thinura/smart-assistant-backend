@@ -1,11 +1,8 @@
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.document import Document
-from app.models.document_chunk import DocumentChunk
-from app.services.embedding_service import EmbeddingService
+from app.services.document_search_service import DocumentSearchService
 from app.tools.base import BaseTool, ToolResult
 
 
@@ -15,8 +12,7 @@ class SearchDocumentsTool(BaseTool):
     requires_approval = False
 
     def __init__(self, db: Session) -> None:
-        self.db = db
-        self.embedding_service = EmbeddingService()
+        self.document_search_service = DocumentSearchService(db)
 
     def run(self, payload: dict[str, Any]) -> ToolResult:
         query = str(payload.get("query", "")).strip()
@@ -28,38 +24,10 @@ class SearchDocumentsTool(BaseTool):
                 error="query is required",
             )
 
-        query_embedding = self.embedding_service.generate_embedding(query)
-
-        distance = DocumentChunk.embedding.cosine_distance(query_embedding).label("distance")
-
-        statement = (
-            select(
-                DocumentChunk.id,
-                DocumentChunk.document_id,
-                DocumentChunk.chunk_index,
-                DocumentChunk.content,
-                Document.original_filename,
-                distance,
-            )
-            .join(Document, Document.id == DocumentChunk.document_id)
-            .where(DocumentChunk.embedding.is_not(None))
-            .order_by(distance)
-            .limit(top_k)
+        results = self.document_search_service.search(
+            query=query,
+            top_k=top_k,
         )
-
-        rows = self.db.execute(statement).all()
-
-        results = [
-            {
-                "chunk_id": str(row.id),
-                "document_id": str(row.document_id),
-                "chunk_index": row.chunk_index,
-                "content": row.content,
-                "source": row.original_filename,
-                "distance": float(row.distance),
-            }
-            for row in rows
-        ]
 
         return ToolResult(
             success=True,
