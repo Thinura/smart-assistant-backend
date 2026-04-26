@@ -1,9 +1,10 @@
 from langchain_core.messages import HumanMessage, SystemMessage
+from sqlalchemy.orm import Session
 
 from app.agents.intents import get_intent_classifier_prompt, normalize_intent
 from app.agents.state import AgentState
 from app.services.chat_model_service import get_chat_model
-
+from app.services.tool_execution_service import ToolExecutionService
 
 def classify_intent(state: AgentState) -> AgentState:
     model = get_chat_model()
@@ -45,13 +46,42 @@ def generate_general_response(state: AgentState) -> AgentState:
 
 
 def handle_document_qa_placeholder(state: AgentState) -> AgentState:
-    return {
-        **state,
-        "assistant_message": (
-            "Document Q&A is not connected yet. Next we will add document upload, "
-            "chunking, embeddings, and retrieval."
-        ),
-    }
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        tool_execution_service = ToolExecutionService(db)
+
+        result, tool_call = tool_execution_service.run_tool(
+            tool_name="conversation_summary",
+            payload={
+                "conversation_id": str(state["conversation_id"]),
+            },
+            agent_run_id=state.get("agent_run_id"),
+        )
+
+        tool_result = {
+            "tool_name": "conversation_summary",
+            "tool_call_id": str(tool_call.id),
+            "success": result.success,
+            "data": result.data,
+            "error": result.error,
+        }
+
+        existing_tool_results = state.get("tool_results", [])
+
+        return {
+            **state,
+            "tool_results": [*existing_tool_results, tool_result],
+            "assistant_message": (
+                "Document Q&A is not connected yet, but the LangGraph node successfully "
+                "called the tool registry and logged the tool execution."
+            ),
+        }
+
+    finally:
+        db.close()
 
 
 def handle_candidate_review_placeholder(state: AgentState) -> AgentState:

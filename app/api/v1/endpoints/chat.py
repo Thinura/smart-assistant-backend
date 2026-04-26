@@ -46,9 +46,11 @@ def create_chat_message(
         result = chat_graph.invoke(
             {
                 "conversation_id": payload.conversation_id,
+                "agent_run_id": agent_run.id,
                 "user_message": payload.message,
                 "intent": AgentIntent.UNKNOWN,
                 "assistant_message": None,
+                "tool_results": [],
                 "error": None,
             }
         )

@@ -1,10 +1,11 @@
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter
 from pydantic import BaseModel
 
 from app.api.deps import DbSession
-from app.models.tool_call import ToolCall
+from app.services.tool_execution_service import ToolExecutionService
 from app.tools.registry import tool_registry
 
 router = APIRouter()
@@ -12,7 +13,7 @@ router = APIRouter()
 
 class ToolRunRequest(BaseModel):
     payload: dict[str, Any]
-    agent_run_id: str | None = None
+    agent_run_id: UUID | None = None
 
 
 @router.get("")
@@ -26,19 +27,13 @@ def run_tool(
     request: ToolRunRequest,
     db: DbSession,
 ) -> dict[str, Any]:
-    result = tool_registry.run(tool_name, request.payload)
+    tool_execution_service = ToolExecutionService(db)
 
-    tool_call = ToolCall(
-        agent_run_id=request.agent_run_id,
+    result, tool_call = tool_execution_service.run_tool(
         tool_name=tool_name,
-        input_payload=request.payload,
-        output_payload=result.data,
-        success=result.success,
-        error_message=result.error,
+        payload=request.payload,
+        agent_run_id=request.agent_run_id,
     )
-
-    db.add(tool_call)
-    db.commit()
 
     response = result.model_dump()
     response["tool_call_id"] = str(tool_call.id)
