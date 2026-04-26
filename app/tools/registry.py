@@ -1,3 +1,5 @@
+from typing import Any
+
 from app.tools.base import BaseTool, ToolResult
 from app.tools.conversation_tools import ConversationSummaryTool
 
@@ -12,7 +14,7 @@ class ToolRegistry:
     def get(self, name: str) -> BaseTool | None:
         return self._tools.get(name)
 
-    def run(self, name: str, payload: dict) -> ToolResult:
+    def run(self, name: str, payload: dict[str, Any]) -> ToolResult:
         tool = self.get(name)
 
         if tool is None:
@@ -23,11 +25,12 @@ class ToolRegistry:
 
         return tool.run(payload)
 
-    def list_tools(self) -> list[dict[str, str]]:
+    def list_tools(self) -> list[dict[str, str | bool]]:
         return [
             {
                 "name": tool.name,
                 "description": tool.description,
+                "requires_approval": tool.requires_approval,
             }
             for tool in self._tools.values()
         ]

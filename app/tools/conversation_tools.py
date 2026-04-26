@@ -5,7 +5,8 @@ from app.tools.base import BaseTool, ToolResult
 
 class ConversationSummaryTool(BaseTool):
     name = "conversation_summary"
-    description = "Returns a simple summary of what the conversation tool can do."
+    description = "Returns a simple summary for a conversation."
+    requires_approval = False
 
     def run(self, payload: dict[str, Any]) -> ToolResult:
         conversation_id = payload.get("conversation_id")
@@ -20,6 +21,6 @@ class ConversationSummaryTool(BaseTool):
             success=True,
             data={
                 "conversation_id": str(conversation_id),
-                "summary": "Conversation tools are available.",
+                "summary": "Conversation tool registry is working.",
             },
         )
