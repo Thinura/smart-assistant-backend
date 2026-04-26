@@ -1,21 +1,39 @@
 from typing import Any
 
+from sqlalchemy.orm import Session
+
 from app.tools.base import BaseTool, ToolResult
 from app.tools.conversation_tools import ConversationSummaryTool
+from app.tools.document_tools import SearchDocumentsTool
 
 
 class ToolRegistry:
     def __init__(self) -> None:
-        self._tools: dict[str, BaseTool] = {}
+        self._static_tools: dict[str, BaseTool] = {
+            ConversationSummaryTool.name: ConversationSummaryTool(),
+        }
 
-    def register(self, tool: BaseTool) -> None:
-        self._tools[tool.name] = tool
+    def _get_db_tools(self, db: Session | None) -> dict[str, BaseTool]:
+        if db is None:
+            return {}
 
-    def get(self, name: str) -> BaseTool | None:
-        return self._tools.get(name)
+        return {
+            SearchDocumentsTool.name: SearchDocumentsTool(db),
+        }
 
-    def run(self, name: str, payload: dict[str, Any]) -> ToolResult:
-        tool = self.get(name)
+    def get(self, name: str, db: Session | None = None) -> BaseTool | None:
+        if name in self._static_tools:
+            return self._static_tools[name]
+
+        return self._get_db_tools(db).get(name)
+
+    def run(
+        self,
+        name: str,
+        payload: dict[str, Any],
+        db: Session | None = None,
+    ) -> ToolResult:
+        tool = self.get(name=name, db=db)
 
         if tool is None:
             return ToolResult(
@@ -25,16 +43,20 @@ class ToolRegistry:
 
         return tool.run(payload)
 
-    def list_tools(self) -> list[dict[str, str | bool]]:
+    def list_tools(self, db: Session | None = None) -> list[dict[str, str | bool]]:
+        tools = {
+            **self._static_tools,
+            **self._get_db_tools(db),
+        }
+
         return [
             {
                 "name": tool.name,
                 "description": tool.description,
                 "requires_approval": tool.requires_approval,
             }
-            for tool in self._tools.values()
+            for tool in tools.values()
         ]
 
 
 tool_registry = ToolRegistry()
-tool_registry.register(ConversationSummaryTool())

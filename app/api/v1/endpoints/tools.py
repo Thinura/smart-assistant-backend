@@ -17,8 +17,8 @@ class ToolRunRequest(BaseModel):
 
 
 @router.get("")
-def list_tools() -> list[dict[str, str | bool]]:
-    return tool_registry.list_tools()
+def list_tools(db: DbSession) -> list[dict[str, str | bool]]:
+    return tool_registry.list_tools(db=db)
 
 
 @router.post("/{tool_name}/run")

@@ -18,7 +18,7 @@ class ToolExecutionService:
         payload: dict[str, Any],
         agent_run_id: UUID | None = None,
     ) -> tuple[ToolResult, ToolCall]:
-        result = tool_registry.run(tool_name, payload)
+        result = tool_registry.run(tool_name, payload, db=self.db)
 
         tool_call = ToolCall(
             agent_run_id=agent_run_id,
