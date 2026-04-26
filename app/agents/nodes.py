@@ -1,12 +1,24 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from app.agents.intents import get_intent_classifier_prompt, normalize_intent
+from app.agents.intents import (
+    detect_intent_by_rules,
+    get_intent_classifier_prompt,
+    normalize_intent,
+)
 from app.agents.state import AgentState
 from app.services.chat_model_service import get_chat_model
 from app.services.tool_execution_service import ToolExecutionService
 
 
 def classify_intent(state: AgentState) -> AgentState:
+    rule_based_intent = detect_intent_by_rules(state["user_message"])
+
+    if rule_based_intent is not None:
+        return {
+            **state,
+            "intent": rule_based_intent,
+        }
+
     model = get_chat_model()
 
     messages = [
