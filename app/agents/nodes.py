@@ -1,10 +1,10 @@
 from langchain_core.messages import HumanMessage, SystemMessage
-from sqlalchemy.orm import Session
 
 from app.agents.intents import get_intent_classifier_prompt, normalize_intent
 from app.agents.state import AgentState
 from app.services.chat_model_service import get_chat_model
 from app.services.tool_execution_service import ToolExecutionService
+
 
 def classify_intent(state: AgentState) -> AgentState:
     model = get_chat_model()
