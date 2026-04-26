@@ -55,3 +55,58 @@ def normalize_intent(value: str) -> AgentIntent:
             return intent
 
     return AgentIntent.UNKNOWN
+
+
+def detect_intent_by_rules(message: str) -> AgentIntent | None:
+    normalized_message = message.strip().lower()
+
+    document_keywords = [
+        "uploaded document",
+        "uploaded file",
+        "from the document",
+        "from uploaded document",
+        "according to the document",
+        "according to uploaded document",
+        "based on the document",
+        "based on uploaded document",
+        "policy document",
+        "document says",
+        "file says",
+        "pdf",
+        "docx",
+    ]
+
+    candidate_keywords = [
+        "review this cv",
+        "review cv",
+        "candidate review",
+        "review this candidate",
+        "match this candidate",
+        "match candidate",
+        "jd match",
+        "job description match",
+        "resume review",
+        "assignment review",
+    ]
+
+    email_keywords = [
+        "draft email",
+        "write email",
+        "email draft",
+        "rejection email",
+        "shortlist email",
+        "interview invite",
+        "follow-up email",
+        "candidate email",
+    ]
+
+    if any(keyword in normalized_message for keyword in document_keywords):
+        return AgentIntent.DOCUMENT_QA
+
+    if any(keyword in normalized_message for keyword in candidate_keywords):
+        return AgentIntent.CANDIDATE_REVIEW
+
+    if any(keyword in normalized_message for keyword in email_keywords):
+        return AgentIntent.EMAIL_DRAFT
+
+    return None
