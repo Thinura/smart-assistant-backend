@@ -11,4 +11,5 @@ class AgentState(TypedDict):
     intent: AgentIntent
     assistant_message: str | None
     tool_results: list[dict[str, Any]]
+    sources: list[dict[str, Any]]
     error: str | None

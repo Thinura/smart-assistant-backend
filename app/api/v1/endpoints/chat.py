@@ -51,6 +51,7 @@ def create_chat_message(
                 "intent": AgentIntent.UNKNOWN,
                 "assistant_message": None,
                 "tool_results": [],
+                "sources": [],
                 "error": None,
             }
         )
@@ -59,6 +60,9 @@ def create_chat_message(
 
         if assistant_text is None:
             raise RuntimeError("Agent did not generate a response")
+
+        sources = result.get("sources", [])
+        tool_results = result.get("tool_results", [])
 
         user_message = Message(
             conversation_id=payload.conversation_id,
@@ -75,6 +79,12 @@ def create_chat_message(
         agent_run.status = AgentRunStatus.COMPLETED
         agent_run.output_message = assistant_text
         agent_run.completed_at = datetime.now(UTC)
+        agent_run.run_metadata = {
+            **(agent_run.run_metadata or {}),
+            "intent": str(result["intent"]),
+            "sources": sources,
+            "tool_results_count": len(tool_results),
+        }
 
         db.add(user_message)
         db.add(assistant_message)
@@ -85,6 +95,7 @@ def create_chat_message(
             agent_run_id=agent_run.id,
             user_message=payload.message,
             assistant_message=assistant_text,
+            sources=sources,
         )
 
     except Exception as exc:

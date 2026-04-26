@@ -1,3 +1,4 @@
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -13,3 +14,4 @@ class ChatResponse(BaseModel):
     agent_run_id: UUID
     user_message: str
     assistant_message: str
+    sources: list[dict[str, Any]] = []

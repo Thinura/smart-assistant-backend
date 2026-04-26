@@ -93,10 +93,22 @@ def handle_document_qa(state: AgentState) -> AgentState:
 
         results = result.data.get("results", [])
 
+        sources = [
+            {
+                "document_id": item["document_id"],
+                "chunk_id": item["chunk_id"],
+                "chunk_index": item["chunk_index"],
+                "source": item["source"],
+                "document_type": item.get("document_type"),
+                "distance": item["distance"],
+            }
+            for item in results
+        ]
         if not results:
             return {
                 **state,
                 "tool_results": [*existing_tool_results, tool_result],
+                "sources": sources,
                 "assistant_message": (
                     "I could not find relevant information in the uploaded documents."
                 ),
@@ -126,6 +138,7 @@ def handle_document_qa(state: AgentState) -> AgentState:
         return {
             **state,
             "tool_results": [*existing_tool_results, tool_result],
+            "sources": [],
             "assistant_message": str(response.content).strip(),
         }
 
