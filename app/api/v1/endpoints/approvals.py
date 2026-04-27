@@ -115,3 +115,29 @@ def reject_request(
     db.refresh(approval_request)
 
     return approval_request
+
+@router.post("/{approval_request_id}/execute", response_model=ApprovalRequestResponse)
+def execute_request(
+    approval_request_id: UUID,
+    db: DbSession,
+) -> ApprovalRequest:
+    approval_request = db.get(ApprovalRequest, approval_request_id)
+
+    if approval_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Approval request not found",
+        )
+
+    if approval_request.status != ApprovalStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only approved approval requests can be executed",
+        )
+
+    approval_request.status = ApprovalStatus.EXECUTED
+
+    db.commit()
+    db.refresh(approval_request)
+
+    return approval_request
