@@ -77,10 +77,11 @@ def detect_intent_by_rules(message: str) -> AgentIntent | None:
     ]
 
     candidate_keywords = [
+        "review candidate",
+        "review this candidate",
+        "candidate review",
         "review this cv",
         "review cv",
-        "candidate review",
-        "review this candidate",
         "match this candidate",
         "match candidate",
         "jd match",

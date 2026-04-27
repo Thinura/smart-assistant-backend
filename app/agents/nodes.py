@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.intents import (
@@ -147,14 +149,69 @@ def handle_document_qa(state: AgentState) -> AgentState:
         db.close()
 
 
-def handle_candidate_review_placeholder(state: AgentState) -> AgentState:
-    return {
-        **state,
-        "assistant_message": (
-            "Candidate review is not connected yet. Next we will add candidate profiles, "
-            "CV parsing, assignment review, and JD matching."
-        ),
-    }
+def handle_candidate_review(state: AgentState) -> AgentState:
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        tool_execution_service = ToolExecutionService(db)
+
+        # For now, the user must include candidate_id in the message.
+        # Example: "Review candidate b984ec8a-bcf3-4a11-b7a7-09c55ddf094e"
+        candidate_id = extract_uuid_from_text(state["user_message"])
+
+        if candidate_id is None:
+            return {
+                **state,
+                "assistant_message": (
+                    "Please provide the candidate ID so I can review the candidate."
+                ),
+            }
+
+        result, tool_call = tool_execution_service.run_tool(
+            tool_name="review_candidate",
+            payload={
+                "candidate_id": str(candidate_id),
+            },
+            agent_run_id=state.get("agent_run_id"),
+        )
+
+        tool_result = {
+            "tool_name": "review_candidate",
+            "tool_call_id": str(tool_call.id),
+            "success": result.success,
+            "data": result.data,
+            "error": result.error,
+        }
+
+        existing_tool_results = state.get("tool_results", [])
+
+        if not result.success or result.data is None:
+            return {
+                **state,
+                "tool_results": [*existing_tool_results, tool_result],
+                "assistant_message": result.error or "Candidate review failed.",
+            }
+
+        candidate = result.data["candidate"]
+        review = result.data["review"]
+
+        return {
+            **state,
+            "tool_results": [*existing_tool_results, tool_result],
+            "sources": [
+                {
+                    "candidate_id": candidate["id"],
+                    "cv_document_id": candidate["cv_document_id"],
+                    "source": candidate["cv_source"],
+                }
+            ],
+            "assistant_message": review,
+        }
+
+    finally:
+        db.close()
 
 
 def handle_email_draft_placeholder(state: AgentState) -> AgentState:
@@ -191,5 +248,15 @@ def detect_document_type_filter(message: str) -> str | None:
 
     if "assignment" in normalized_message:
         return "assignment"
+
+    return None
+
+
+def extract_uuid_from_text(text: str) -> UUID | None:
+    for token in text.replace(",", " ").replace(".", " ").split():
+        try:
+            return UUID(token)
+        except ValueError:
+            continue
 
     return None
