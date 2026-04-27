@@ -10,6 +10,7 @@ from app.schemas.approval_request import (
     ApprovalRequestResponse,
     ApprovalReviewRequest,
 )
+from app.services.approval_execution_service import ApprovalExecutionService
 
 router = APIRouter()
 
@@ -129,13 +130,18 @@ def execute_request(
             detail="Approval request not found",
         )
 
-    if approval_request.status != ApprovalStatus.APPROVED:
+    execution_service = ApprovalExecutionService()
+
+    try:
+        execution_result = execution_service.execute(approval_request)
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only approved approval requests can be executed",
-        )
+            detail=str(exc),
+        ) from exc
 
     approval_request.status = ApprovalStatus.EXECUTED
+    approval_request.execution_result = execution_result
 
     db.commit()
     db.refresh(approval_request)

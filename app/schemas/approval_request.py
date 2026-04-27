@@ -28,6 +28,7 @@ class ApprovalRequestResponse(BaseModel):
     title: str
     description: str | None
     action_payload: dict[str, Any]
+    execution_result: dict[str, Any] | None = None
     reviewed_by: str | None
     review_comment: str | None
     created_at: datetime
