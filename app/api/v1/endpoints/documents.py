@@ -5,10 +5,12 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 
 from app.api.deps import DbSession
+from app.models.audit_log import AuditEventType
 from app.models.document import Document, DocumentStatus, DocumentType
 from app.models.document_chunk import DocumentChunk
 from app.schemas.document import DocumentDetailResponse, DocumentListResponse
 from app.schemas.document_chunk import DocumentChunkResponse
+from app.services.audit_log_service import AuditLogService
 from app.services.document_chunking_service import DocumentChunkingService
 from app.services.document_text_extraction_service import DocumentTextExtractionService
 from app.services.embedding_service import EmbeddingService
@@ -101,8 +103,20 @@ async def upload_document(
 
         raise RuntimeError(f"Failed to extract document text: {exc}") from exc
 
+    AuditLogService(db).record(
+        event_type=AuditEventType.DOCUMENT_UPLOADED,
+        entity_type="document",
+        entity_id=str(document.id),
+        actor="system",
+        metadata={
+            "original_filename": document.original_filename,
+            "content_type": document.content_type,
+            "file_size": document.file_size,
+            "document_type": document.document_type.value,
+            "status": document.status.value,
+        },
+    )
     db.commit()
-
     db.refresh(document)
 
     return document
