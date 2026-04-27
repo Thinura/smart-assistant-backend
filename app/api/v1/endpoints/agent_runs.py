@@ -4,7 +4,14 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import DbSession
 from app.models.agent_run import AgentRun
-from app.schemas.agent_run import AgentRunResponse
+from app.models.approval_request import ApprovalRequest
+from app.models.audit_log import AuditLog
+from app.models.tool_call import ToolCall
+from app.schemas.agent_run import (
+    AgentRunResponse,
+    AgentRunTraceResponse,
+    AgentRunTraceSummary,
+)
 
 router = APIRouter()
 
@@ -23,3 +30,61 @@ def get_agent_run(
         )
 
     return agent_run
+
+
+@router.get("/{agent_run_id}/trace", response_model=AgentRunTraceResponse)
+def get_agent_run_trace(
+    agent_run_id: UUID,
+    db: DbSession,
+) -> AgentRunTraceResponse:
+    agent_run = db.get(AgentRun, agent_run_id)
+
+    if agent_run is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Agent run not found",
+        )
+
+    tool_calls = (
+        db.query(ToolCall)
+        .filter(ToolCall.agent_run_id == agent_run_id)
+        .order_by(ToolCall.created_at.asc())
+        .all()
+    )
+
+    approval_requests = (
+        db.query(ApprovalRequest)
+        .filter(ApprovalRequest.agent_run_id == agent_run_id)
+        .order_by(ApprovalRequest.created_at.asc())
+        .all()
+    )
+
+    audit_logs = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.event_metadata["agent_run_id"].astext == str(agent_run_id),
+        )
+        .order_by(AuditLog.created_at.asc())
+        .all()
+    )
+
+    run_metadata = agent_run.run_metadata or {}
+
+    summary = AgentRunTraceSummary(
+        agent_run_id=agent_run.id,
+        status=agent_run.status,
+        intent=run_metadata.get("intent"),
+        tool_call_count=len(tool_calls),
+        approval_request_count=len(approval_requests),
+        audit_log_count=len(audit_logs),
+        has_error=agent_run.error_message is not None
+        or any(not tool_call.success for tool_call in tool_calls),
+    )
+
+    return AgentRunTraceResponse(
+        summary=summary,
+        agent_run=agent_run,
+        tool_calls=tool_calls,
+        approval_requests=approval_requests,
+        audit_logs=audit_logs,
+    )
