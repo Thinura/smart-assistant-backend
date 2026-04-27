@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import DbSession
 from app.models.agent_run import AgentRun, AgentRunStatus
@@ -70,6 +70,11 @@ def list_conversation_messages(
 def get_conversation_trace(
     conversation_id: UUID,
     db: DbSession,
+    limit: int = Query(default=50, ge=1, le=200),
+    include_messages: bool = True,
+    include_agent_runs: bool = True,
+    include_tool_calls: bool = True,
+    include_approvals: bool = True,
 ) -> ConversationTraceResponse:
     conversation = db.get(Conversation, conversation_id)
 
@@ -79,52 +84,94 @@ def get_conversation_trace(
             detail="Conversation not found",
         )
 
-    messages = (
-        db.query(Message)
-        .filter(Message.conversation_id == conversation_id)
-        .order_by(Message.created_at.asc())
-        .all()
-    )
-
-    agent_runs = (
+    all_agent_runs = (
         db.query(AgentRun)
         .filter(AgentRun.conversation_id == conversation_id)
         .order_by(AgentRun.started_at.asc())
         .all()
     )
 
-    agent_run_ids = [agent_run.id for agent_run in agent_runs]
+    agent_run_ids = [agent_run.id for agent_run in all_agent_runs]
 
-    tool_calls = []
-    approval_requests = []
+    message_count = db.query(Message).filter(Message.conversation_id == conversation_id).count()
+
+    tool_call_count = 0
+    approval_request_count = 0
+    pending_approval_count = 0
 
     if agent_run_ids:
+        tool_call_count = (
+            db.query(ToolCall).filter(ToolCall.agent_run_id.in_(agent_run_ids)).count()
+        )
+
+        approval_request_count = (
+            db.query(ApprovalRequest)
+            .filter(ApprovalRequest.agent_run_id.in_(agent_run_ids))
+            .count()
+        )
+
+        pending_approval_count = (
+            db.query(ApprovalRequest)
+            .filter(
+                ApprovalRequest.agent_run_id.in_(agent_run_ids),
+                ApprovalRequest.status == ApprovalStatus.PENDING,
+            )
+            .count()
+        )
+
+    messages = []
+    if include_messages:
+        messages = (
+            db.query(Message)
+            .filter(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        messages.reverse()
+
+    agent_runs = []
+    visible_agent_run_ids = agent_run_ids
+
+    if include_agent_runs:
+        agent_runs = (
+            db.query(AgentRun)
+            .filter(AgentRun.conversation_id == conversation_id)
+            .order_by(AgentRun.started_at.desc())
+            .limit(limit)
+            .all()
+        )
+        agent_runs.reverse()
+        visible_agent_run_ids = [agent_run.id for agent_run in agent_runs]
+
+    tool_calls = []
+    if include_tool_calls and visible_agent_run_ids:
         tool_calls = (
             db.query(ToolCall)
-            .filter(ToolCall.agent_run_id.in_(agent_run_ids))
+            .filter(ToolCall.agent_run_id.in_(visible_agent_run_ids))
             .order_by(ToolCall.created_at.asc())
             .all()
         )
 
+    approval_requests = []
+    if include_approvals and visible_agent_run_ids:
         approval_requests = (
             db.query(ApprovalRequest)
-            .filter(ApprovalRequest.agent_run_id.in_(agent_run_ids))
+            .filter(ApprovalRequest.agent_run_id.in_(visible_agent_run_ids))
             .order_by(ApprovalRequest.created_at.asc())
             .all()
         )
 
     summary = ConversationTraceSummary(
         conversation_id=conversation.id,
-        message_count=len(messages),
-        agent_run_count=len(agent_runs),
-        tool_call_count=len(tool_calls),
-        approval_request_count=len(approval_requests),
-        pending_approval_count=sum(
-            1
-            for approval_request in approval_requests
-            if approval_request.status == ApprovalStatus.PENDING
+        message_count=message_count,
+        agent_run_count=len(all_agent_runs),
+        tool_call_count=tool_call_count,
+        approval_request_count=approval_request_count,
+        pending_approval_count=pending_approval_count,
+        has_failed_run=any(
+            agent_run.status == AgentRunStatus.FAILED for agent_run in all_agent_runs
         ),
-        has_failed_run=any(agent_run.status == AgentRunStatus.FAILED for agent_run in agent_runs),
     )
 
     return ConversationTraceResponse(
