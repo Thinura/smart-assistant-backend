@@ -1,9 +1,10 @@
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.document import Document
+from app.models.document import Document, DocumentType
 from app.models.document_chunk import DocumentChunk
 from app.services.embedding_service import EmbeddingService
 
@@ -17,6 +18,8 @@ class DocumentSearchService:
         self,
         query: str,
         top_k: int = 5,
+        document_type: DocumentType | None = None,
+        document_id: UUID | None = None,
     ) -> list[dict[str, Any]]:
         cleaned_query = query.strip()
 
@@ -39,9 +42,15 @@ class DocumentSearchService:
             )
             .join(Document, Document.id == DocumentChunk.document_id)
             .where(DocumentChunk.embedding.is_not(None))
-            .order_by(distance)
-            .limit(top_k)
         )
+
+        if document_type is not None:
+            statement = statement.where(Document.document_type == document_type)
+
+        if document_id is not None:
+            statement = statement.where(Document.id == document_id)
+
+        statement = statement.order_by(distance).limit(top_k)
 
         rows = self.db.execute(statement).all()
 

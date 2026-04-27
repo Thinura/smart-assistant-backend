@@ -70,6 +70,7 @@ def handle_document_qa(state: AgentState) -> AgentState:
             payload={
                 "query": state["user_message"],
                 "top_k": 3,
+                "document_type": detect_document_type_filter(state["user_message"]),
             },
             agent_run_id=state.get("agent_run_id"),
         )
@@ -174,3 +175,21 @@ def handle_unknown_intent(state: AgentState) -> AgentState:
             "Please ask again with a little more context."
         ),
     }
+
+
+def detect_document_type_filter(message: str) -> str | None:
+    normalized_message = message.lower()
+
+    if "policy" in normalized_message:
+        return "policy"
+
+    if "cv" in normalized_message or "resume" in normalized_message:
+        return "cv"
+
+    if "job description" in normalized_message or "jd" in normalized_message:
+        return "job_description"
+
+    if "assignment" in normalized_message:
+        return "assignment"
+
+    return None
