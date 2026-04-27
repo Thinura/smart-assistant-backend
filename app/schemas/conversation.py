@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.agent_run import AgentRunStatus
 from app.models.approval_request import ApprovalActionType, ApprovalStatus
+from app.models.audit_log import AuditEventType
 from app.models.message import MessageRole
 
 
@@ -78,7 +79,20 @@ class ConversationTraceSummary(BaseModel):
     tool_call_count: int
     approval_request_count: int
     pending_approval_count: int
+    audit_log_count: int
     has_failed_run: bool
+
+
+class ConversationTraceAuditLogResponse(BaseModel):
+    id: UUID
+    event_type: AuditEventType
+    actor: str | None
+    entity_type: str
+    entity_id: str | None
+    event_metadata: dict[str, Any] | None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ConversationTraceResponse(BaseModel):
@@ -88,3 +102,4 @@ class ConversationTraceResponse(BaseModel):
     agent_runs: list[ConversationTraceAgentRunResponse]
     tool_calls: list[ConversationTraceToolCallResponse]
     approval_requests: list[ConversationTraceApprovalResponse]
+    audit_logs: list[ConversationTraceAuditLogResponse]

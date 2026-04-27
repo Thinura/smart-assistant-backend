@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.api.deps import DbSession
 from app.models.agent_run import AgentRun, AgentRunStatus
 from app.models.approval_request import ApprovalRequest, ApprovalStatus
+from app.models.audit_log import AuditLog
 from app.models.conversation import Conversation
 from app.models.message import Message
 from app.models.tool_call import ToolCall
@@ -75,6 +76,7 @@ def get_conversation_trace(
     include_agent_runs: bool = True,
     include_tool_calls: bool = True,
     include_approvals: bool = True,
+    include_audit_logs: bool = True,
 ) -> ConversationTraceResponse:
     conversation = db.get(Conversation, conversation_id)
 
@@ -92,6 +94,18 @@ def get_conversation_trace(
     )
 
     agent_run_ids = [agent_run.id for agent_run in all_agent_runs]
+    audit_log_count = 0
+
+    if agent_run_ids:
+        audit_log_count = (
+            db.query(AuditLog)
+            .filter(
+                AuditLog.event_metadata["agent_run_id"].astext.in_(
+                    [str(agent_run_id) for agent_run_id in agent_run_ids]
+                )
+            )
+            .count()
+        )
 
     message_count = db.query(Message).filter(Message.conversation_id == conversation_id).count()
 
@@ -154,11 +168,23 @@ def get_conversation_trace(
         )
 
     approval_requests = []
+    audit_logs = []
+
     if include_approvals and visible_agent_run_ids:
         approval_requests = (
             db.query(ApprovalRequest)
             .filter(ApprovalRequest.agent_run_id.in_(visible_agent_run_ids))
             .order_by(ApprovalRequest.created_at.asc())
+            .all()
+        )
+        audit_logs = (
+            db.query(AuditLog)
+            .filter(
+                AuditLog.event_metadata["agent_run_id"].astext.in_(
+                    [str(agent_run_id) for agent_run_id in visible_agent_run_ids]
+                )
+            )
+            .order_by(AuditLog.created_at.asc())
             .all()
         )
 
@@ -169,6 +195,7 @@ def get_conversation_trace(
         tool_call_count=tool_call_count,
         approval_request_count=approval_request_count,
         pending_approval_count=pending_approval_count,
+        audit_log_count=audit_log_count,
         has_failed_run=any(
             agent_run.status == AgentRunStatus.FAILED for agent_run in all_agent_runs
         ),
@@ -181,4 +208,5 @@ def get_conversation_trace(
         agent_runs=agent_runs,
         tool_calls=tool_calls,
         approval_requests=approval_requests,
+        audit_logs=audit_logs,
     )
