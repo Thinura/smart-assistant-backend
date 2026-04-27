@@ -197,6 +197,19 @@ def handle_candidate_review(state: AgentState) -> AgentState:
         candidate = result.data["candidate"]
         review = result.data["review"]
 
+        assistant_message = (
+            f"Summary: {review['summary']}\n\n"
+            f"Score: {review['score']}/100\n"
+            f"Recommendation: {review['recommendation']}\n"
+            f"Confidence: {review['confidence']}\n\n"
+            "Strengths:\n"
+            + "\n".join(f"- {item}" for item in review["strengths"])
+            + "\n\nRisks/Gaps:\n"
+            + "\n".join(f"- {item}" for item in review["risks"])
+            + "\n\nInterview Focus Areas:\n"
+            + "\n".join(f"- {item}" for item in review["interview_focus_areas"])
+        )
+
         return {
             **state,
             "tool_results": [*existing_tool_results, tool_result],
@@ -207,7 +220,7 @@ def handle_candidate_review(state: AgentState) -> AgentState:
                     "source": candidate["cv_source"],
                 }
             ],
-            "assistant_message": review,
+            "assistant_message": assistant_message,
         }
 
     finally:
