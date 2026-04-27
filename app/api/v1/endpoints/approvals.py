@@ -5,12 +5,14 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import DbSession
 from app.models.approval_request import ApprovalRequest, ApprovalStatus
+from app.models.audit_log import AuditEventType
 from app.schemas.approval_request import (
     ApprovalRequestCreate,
     ApprovalRequestResponse,
     ApprovalReviewRequest,
 )
 from app.services.approval_execution_service import ApprovalExecutionService
+from app.services.audit_log_service import AuditLogService
 
 router = APIRouter()
 
@@ -27,6 +29,21 @@ def create_approval_request(
     approval_request = ApprovalRequest(**payload.model_dump())
 
     db.add(approval_request)
+    db.flush()
+
+    AuditLogService(db).record(
+        event_type=AuditEventType.APPROVAL_CREATED,
+        entity_type="approval_request",
+        entity_id=str(approval_request.id),
+        actor="system",
+        metadata={
+            "action_type": approval_request.action_type.value,
+            "title": approval_request.title,
+            "agent_run_id": str(approval_request.agent_run_id)
+            if approval_request.agent_run_id
+            else None,
+        },
+    )
     db.commit()
     db.refresh(approval_request)
 
@@ -81,6 +98,16 @@ def approve_request(
     approval_request.review_comment = payload.review_comment
     approval_request.reviewed_at = datetime.now(UTC)
 
+    AuditLogService(db).record(
+        event_type=AuditEventType.APPROVAL_APPROVED,
+        entity_type="approval_request",
+        entity_id=str(approval_request.id),
+        actor=payload.reviewed_by,
+        metadata={
+            "review_comment": payload.review_comment,
+            "action_type": approval_request.action_type.value,
+        },
+    )
     db.commit()
     db.refresh(approval_request)
 
@@ -115,7 +142,18 @@ def reject_request(
     db.commit()
     db.refresh(approval_request)
 
+    AuditLogService(db).record(
+        event_type=AuditEventType.APPROVAL_REJECTED,
+        entity_type="approval_request",
+        entity_id=str(approval_request.id),
+        actor=payload.reviewed_by,
+        metadata={
+            "review_comment": payload.review_comment,
+            "action_type": approval_request.action_type.value,
+        },
+    )
     return approval_request
+
 
 @router.post("/{approval_request_id}/execute", response_model=ApprovalRequestResponse)
 def execute_request(
@@ -143,6 +181,16 @@ def execute_request(
     approval_request.status = ApprovalStatus.EXECUTED
     approval_request.execution_result = execution_result
 
+    AuditLogService(db).record(
+        event_type=AuditEventType.APPROVAL_EXECUTED,
+        entity_type="approval_request",
+        entity_id=str(approval_request.id),
+        actor="system",
+        metadata={
+            "action_type": approval_request.action_type.value,
+            "execution_result": execution_result,
+        },
+    )
     db.commit()
     db.refresh(approval_request)
 
