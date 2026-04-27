@@ -7,6 +7,7 @@ from app.tools.base import BaseTool, ToolResult
 from app.tools.candidate_tools import ReviewCandidateTool
 from app.tools.conversation_tools import ConversationSummaryTool
 from app.tools.document_tools import SearchDocumentsTool
+from app.tools.email_tools import DraftCandidateEmailTool
 
 
 class ToolRegistry:
@@ -23,6 +24,7 @@ class ToolRegistry:
             SearchDocumentsTool.name: SearchDocumentsTool(db),
             ReviewCandidateTool.name: ReviewCandidateTool(db),
             CreateApprovalRequestTool.name: CreateApprovalRequestTool(db),
+            DraftCandidateEmailTool.name: DraftCandidateEmailTool(db),
         }
 
     def get(self, name: str, db: Session | None = None) -> BaseTool | None:
