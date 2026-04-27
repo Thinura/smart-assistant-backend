@@ -2,6 +2,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.tools.approval_tools import CreateApprovalRequestTool
 from app.tools.base import BaseTool, ToolResult
 from app.tools.candidate_tools import ReviewCandidateTool
 from app.tools.conversation_tools import ConversationSummaryTool
@@ -21,6 +22,7 @@ class ToolRegistry:
         return {
             SearchDocumentsTool.name: SearchDocumentsTool(db),
             ReviewCandidateTool.name: ReviewCandidateTool(db),
+            CreateApprovalRequestTool.name: CreateApprovalRequestTool(db),
         }
 
     def get(self, name: str, db: Session | None = None) -> BaseTool | None:

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints.agent_runs import router as agent_runs_router
+from app.api.v1.endpoints.approvals import router as approvals_router
 from app.api.v1.endpoints.candidates import router as candidates_router
 from app.api.v1.endpoints.chat import router as chat_router
 from app.api.v1.endpoints.conversations import router as conversations_router
@@ -50,4 +51,10 @@ api_router.include_router(
     candidates_router,
     prefix="/candidates",
     tags=["Candidates"],
+)
+
+api_router.include_router(
+    approvals_router,
+    prefix="/approvals",
+    tags=["Approvals"],
 )
