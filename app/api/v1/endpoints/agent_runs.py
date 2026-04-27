@@ -1,9 +1,9 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import DbSession
-from app.models.agent_run import AgentRun
+from app.models.agent_run import AgentRun, AgentRunStatus
 from app.models.approval_request import ApprovalRequest
 from app.models.audit_log import AuditLog
 from app.models.tool_call import ToolCall
@@ -13,8 +13,27 @@ from app.schemas.agent_run import (
     AgentRunTraceSummary,
 )
 
+STATUS_FILTER_QUERY = Query(default=None, alias="status")
+LIMIT_QUERY = Query(default=50, ge=1, le=200)
+
 router = APIRouter()
 
+@router.get("", response_model=list[AgentRunResponse])
+def list_agent_runs(
+    db: DbSession,
+    conversation_id: UUID | None = None,
+    status_filter: AgentRunStatus | None = STATUS_FILTER_QUERY,
+    limit: int = LIMIT_QUERY,
+) -> list[AgentRun]:
+    query = db.query(AgentRun)
+
+    if conversation_id is not None:
+        query = query.filter(AgentRun.conversation_id == conversation_id)
+
+    if status_filter is not None:
+        query = query.filter(AgentRun.status == status_filter)
+
+    return query.order_by(AgentRun.started_at.desc()).limit(limit).all()
 
 @router.get("/{agent_run_id}", response_model=AgentRunResponse)
 def get_agent_run(
