@@ -1,15 +1,24 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import DbSession
 from app.models.audit_log import AuditEventType
-from app.models.candidate import Candidate
+from app.models.candidate import Candidate, CandidateStatus
 from app.models.document import Document, DocumentType
-from app.schemas.candidate import CandidateCreate, CandidateResponse, CandidateUpdate
+from app.schemas.candidate import (
+    CandidateCreate,
+    CandidateResponse,
+    CandidateUpdate,
+)
 from app.services.audit_log_service import AuditLogService
 
 router = APIRouter()
+
+STATUS_QUERY = Query(default=None, alias="status")
+ROLE_QUERY = Query(default=None, alias="role")
+SEARCH_QUERY = Query(default=None, alias="search")
+LIMIT_QUERY = Query(default=100, ge=1, le=500)
 
 
 @router.post("", response_model=CandidateResponse, status_code=status.HTTP_201_CREATED)
@@ -59,8 +68,28 @@ def create_candidate(
 @router.get("", response_model=list[CandidateResponse])
 def list_candidates(
     db: DbSession,
+    status_filter: CandidateStatus | None = STATUS_QUERY,
+    role_filter: str | None = ROLE_QUERY,
+    search: str | None = SEARCH_QUERY,
+    limit: int = LIMIT_QUERY,
 ) -> list[Candidate]:
-    return db.query(Candidate).order_by(Candidate.created_at.desc()).all()
+    query = db.query(Candidate)
+
+    if status_filter is not None:
+        query = query.filter(Candidate.status == status_filter)
+
+    if role_filter is not None:
+        query = query.filter(Candidate.role_applied_for.ilike(f"%{role_filter}%"))
+
+    if search is not None:
+        search_pattern = f"%{search}%"
+        query = query.filter(
+            Candidate.full_name.ilike(search_pattern)
+            | Candidate.email.ilike(search_pattern)
+            | Candidate.role_applied_for.ilike(search_pattern)
+        )
+
+    return query.order_by(Candidate.created_at.desc()).limit(limit).all()
 
 
 @router.get("/{candidate_id}", response_model=CandidateResponse)
