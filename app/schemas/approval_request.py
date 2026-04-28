@@ -36,3 +36,9 @@ class ApprovalRequestResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ApprovalRequestUpdate(BaseModel):
+    title: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    action_payload: dict[str, Any] | None = None

@@ -20,6 +20,7 @@ class AuditEventType(StrEnum):
     CANDIDATE_CREATED = "candidate.created"
     CANDIDATE_UPDATED = "candidate.updated"
     AGENT_RUN_COMPLETED = "agent_run.completed"
+    APPROVAL_UPDATED = "approval.updated"
 
 
 class AuditLog(Base):

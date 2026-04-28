@@ -1,0 +1,1 @@
+CREATE DATABASE smart_assistant_test;

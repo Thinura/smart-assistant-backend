@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import DbSession
 from app.models.approval_request import ApprovalRequest, ApprovalStatus
@@ -9,12 +9,17 @@ from app.models.audit_log import AuditEventType
 from app.schemas.approval_request import (
     ApprovalRequestCreate,
     ApprovalRequestResponse,
+    ApprovalRequestUpdate,
     ApprovalReviewRequest,
 )
 from app.services.approval_execution_service import ApprovalExecutionService
 from app.services.audit_log_service import AuditLogService
 
 router = APIRouter()
+
+STATUS_QUERY = Query(default=None, alias="status")
+LIMIT_QUERY = Query(default=100, ge=1, le=500)
+APPROVAL_REQUEST_NOT_FOUND = "Approval request not found"
 
 
 @router.post(
@@ -53,8 +58,57 @@ def create_approval_request(
 @router.get("", response_model=list[ApprovalRequestResponse])
 def list_approval_requests(
     db: DbSession,
+    status_filter: ApprovalStatus | None = STATUS_QUERY,
+    limit: int = LIMIT_QUERY,
 ) -> list[ApprovalRequest]:
-    return db.query(ApprovalRequest).order_by(ApprovalRequest.created_at.desc()).all()
+    query = db.query(ApprovalRequest)
+
+    if status_filter is not None:
+        query = query.filter(ApprovalRequest.status == status_filter)
+
+    return query.order_by(ApprovalRequest.created_at.desc()).limit(limit).all()
+
+
+@router.patch("/{approval_request_id}", response_model=ApprovalRequestResponse)
+def update_approval_request(
+    approval_request_id: UUID,
+    payload: ApprovalRequestUpdate,
+    db: DbSession,
+) -> ApprovalRequest:
+    approval_request = db.get(ApprovalRequest, approval_request_id)
+
+    if approval_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=APPROVAL_REQUEST_NOT_FOUND,
+        )
+
+    if approval_request.status != ApprovalStatus.PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only pending approval requests can be updated",
+        )
+
+    update_data = payload.model_dump(exclude_unset=True)
+
+    for field, value in update_data.items():
+        setattr(approval_request, field, value)
+
+    AuditLogService(db).record(
+        event_type=AuditEventType.APPROVAL_UPDATED,
+        entity_type="approval_request",
+        entity_id=str(approval_request.id),
+        actor="system",
+        metadata={
+            "updated_fields": list(update_data.keys()),
+            "action_type": approval_request.action_type.value,
+        },
+    )
+
+    db.commit()
+    db.refresh(approval_request)
+
+    return approval_request
 
 
 @router.get("/{approval_request_id}", response_model=ApprovalRequestResponse)
@@ -67,7 +121,7 @@ def get_approval_request(
     if approval_request is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Approval request not found",
+            detail=APPROVAL_REQUEST_NOT_FOUND,
         )
 
     return approval_request
@@ -84,7 +138,7 @@ def approve_request(
     if approval_request is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Approval request not found",
+            detail=APPROVAL_REQUEST_NOT_FOUND,
         )
 
     if approval_request.status != ApprovalStatus.PENDING:
@@ -125,7 +179,7 @@ def reject_request(
     if approval_request is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Approval request not found",
+            detail=APPROVAL_REQUEST_NOT_FOUND,
         )
 
     if approval_request.status != ApprovalStatus.PENDING:
@@ -165,7 +219,7 @@ def execute_request(
     if approval_request is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Approval request not found",
+            detail=APPROVAL_REQUEST_NOT_FOUND,
         )
 
     execution_service = ApprovalExecutionService()

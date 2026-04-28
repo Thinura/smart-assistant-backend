@@ -18,6 +18,7 @@ LIMIT_QUERY = Query(default=50, ge=1, le=200)
 
 router = APIRouter()
 
+
 @router.get("", response_model=list[AgentRunResponse])
 def list_agent_runs(
     db: DbSession,
@@ -34,6 +35,7 @@ def list_agent_runs(
         query = query.filter(AgentRun.status == status_filter)
 
     return query.order_by(AgentRun.started_at.desc()).limit(limit).all()
+
 
 @router.get("/{agent_run_id}", response_model=AgentRunResponse)
 def get_agent_run(
