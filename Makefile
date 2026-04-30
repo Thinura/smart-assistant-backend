@@ -33,6 +33,5 @@ reset-test-db:
 	docker exec -it smart-assistant-postgres psql -U smart_user -d postgres -c "DROP DATABASE IF EXISTS smart_assistant_test;"
 	docker exec -it smart-assistant-postgres psql -U smart_user -d postgres -c "CREATE DATABASE smart_assistant_test OWNER smart_user;"
 
-reset-test-db-migrate:
-	make reset-test-db
-	make migrate-test
+reset-test-db-migrate: reset-test-db
+	$(MAKE) migrate-test

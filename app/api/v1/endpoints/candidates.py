@@ -7,6 +7,7 @@ from app.models.agent_run import AgentRun
 from app.models.approval_request import ApprovalRequest, ApprovalStatus
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.candidate import Candidate, CandidateStatus
+from app.models.candidate_review import CandidateReview
 from app.models.document import Document, DocumentType
 from app.models.outbox_message import OutboxMessage, OutboxMessageStatus
 from app.schemas.candidate import (
@@ -17,6 +18,7 @@ from app.schemas.candidate import (
     CandidateTimelineSummary,
     CandidateUpdate,
 )
+from app.schemas.candidate_review import CandidateReviewResponse
 from app.services.audit_log_service import AuditLogService
 
 router = APIRouter()
@@ -229,6 +231,27 @@ def get_candidate_timeline(
         agent_runs=agent_runs,
         approval_requests=approval_requests,
         outbox_messages=outbox_messages,
+    )
+
+
+@router.get("/{candidate_id}/reviews", response_model=list[CandidateReviewResponse])
+def list_candidate_reviews(
+    candidate_id: UUID,
+    db: DbSession,
+) -> list[CandidateReview]:
+    candidate = db.get(Candidate, candidate_id)
+
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+
+    return (
+        db.query(CandidateReview)
+        .filter(CandidateReview.candidate_id == candidate_id)
+        .order_by(CandidateReview.created_at.desc())
+        .all()
     )
 
 

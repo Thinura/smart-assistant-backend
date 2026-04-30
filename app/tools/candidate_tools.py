@@ -1,4 +1,5 @@
 import json
+from json import JSONDecodeError
 from typing import Any
 from uuid import UUID
 
@@ -9,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.models.candidate import Candidate
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
-from app.schemas.candidate_review import CandidateReviewResult
+from app.schemas.candidate_review import CandidateReviewCreate
+from app.services.candidate_review_service import CandidateReviewService
 from app.services.chat_model_service import get_chat_model
 from app.tools.base import BaseTool, ToolResult
 
@@ -79,6 +81,32 @@ class ReviewCandidateTool(BaseTool):
                 error=str(exc),
             )
 
+        review_data = review if isinstance(review, dict) else review.model_dump()
+
+        persisted_review = CandidateReviewService(self.db).create_review(
+            CandidateReviewCreate(
+                candidate_id=candidate.id,
+                agent_run_id=None,
+                cv_document_id=candidate.cv_document_id,
+                role_applied_for=candidate.role_applied_for,
+                summary=review_data["summary"],
+                score=review_data.get("score"),
+                recommendation=review_data["recommendation"],
+                confidence=review_data["confidence"],
+                strengths=review_data.get("strengths", []),
+                risks=review_data.get("risks", []),
+                interview_focus_areas=review_data.get("interview_focus_areas", []),
+                source_metadata={
+                    "source": "review_candidate_tool",
+                    "cv_document_id": str(candidate.cv_document_id),
+                    "cv_source": cv_document.original_filename,
+                },
+            )
+        )
+
+        self.db.commit()
+        self.db.refresh(persisted_review)
+
         return ToolResult(
             success=True,
             data={
@@ -91,7 +119,8 @@ class ReviewCandidateTool(BaseTool):
                     "cv_document_id": str(candidate.cv_document_id),
                     "cv_source": cv_document.original_filename,
                 },
-                "review": review.model_dump(),
+                "review": review_data,
+                "candidate_review_id": str(persisted_review.id),
             },
         )
 
@@ -99,7 +128,7 @@ class ReviewCandidateTool(BaseTool):
         self,
         candidate: Candidate,
         cv_text: str,
-    ) -> CandidateReviewResult:
+    ) -> dict[str, Any]:
         model = get_chat_model()
 
         messages = [
@@ -157,16 +186,33 @@ class ReviewCandidateTool(BaseTool):
         except ValueError:
             return None
 
-    def _parse_review_json(self, raw_content: str) -> CandidateReviewResult:
-        cleaned_content = self._extract_json_object(raw_content)
+    def _parse_review_json(self, content: str) -> dict[str, Any]:
+        cleaned_content = content.strip()
 
         try:
-            parsed = json.loads(cleaned_content)
-            return CandidateReviewResult.model_validate(parsed)
-        except (json.JSONDecodeError, ValidationError):
-            repaired_content = self._repair_json_object(cleaned_content)
-            parsed = json.loads(repaired_content)
-            return CandidateReviewResult.model_validate(parsed)
+            return json.loads(cleaned_content)
+        except JSONDecodeError:
+            pass
+
+        start_index = cleaned_content.find("{")
+        end_index = cleaned_content.rfind("}")
+
+        if start_index == -1:
+            raise RuntimeError(
+                f"Candidate review model returned invalid structured output: {content}"
+            )
+
+        if end_index == -1:
+            repaired_content = cleaned_content[start_index:] + "}"
+        else:
+            repaired_content = cleaned_content[start_index : end_index + 1]
+
+        try:
+            return json.loads(repaired_content)
+        except JSONDecodeError as exc:
+            raise RuntimeError(
+                f"Candidate review model returned invalid structured output: {content}"
+            ) from exc
 
     def _extract_json_object(self, raw_content: str) -> str:
         cleaned_content = raw_content.strip()

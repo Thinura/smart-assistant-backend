@@ -23,6 +23,7 @@ class AuditEventType(StrEnum):
     APPROVAL_UPDATED = "approval.updated"
     OUTBOX_CREATED = "outbox.created"
     OUTBOX_MARKED_SENT = "outbox.marked_sent"
+    CANDIDATE_REVIEW_CREATED = "candidate_review.created"
 
 
 class AuditLog(Base):
