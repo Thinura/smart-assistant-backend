@@ -184,3 +184,68 @@ def test_get_candidate_timeline_returns_404_for_missing_candidate(
     response = client.get("/api/v1/candidates/00000000-0000-0000-0000-000000000000/timeline")
 
     assert response.status_code == 404
+
+
+def test_candidate_timeline_includes_outbox_messages(client: TestClient) -> None:
+    candidate_response = client.post(
+        "/api/v1/candidates",
+        json={
+            "full_name": "Outbox Timeline Candidate",
+            "email": "outbox.timeline@example.com",
+            "role_applied_for": "QA Intern",
+        },
+    )
+
+    assert candidate_response.status_code == 201
+
+    candidate = candidate_response.json()
+    candidate_id = candidate["id"]
+
+    approval_response = client.post(
+        "/api/v1/approvals",
+        json={
+            "action_type": "email_draft",
+            "title": "Approve timeline outbox email",
+            "description": "Testing candidate timeline outbox integration.",
+            "action_payload": {
+                "candidate_id": candidate_id,
+                "candidate_email": candidate["email"],
+                "email_type": "rejection",
+                "subject": "Application update",
+                "draft_body": "Thank you for applying.",
+            },
+        },
+    )
+
+    assert approval_response.status_code == 201
+
+    approval_id = approval_response.json()["id"]
+
+    approve_response = client.post(
+        f"/api/v1/approvals/{approval_id}/approve",
+        json={
+            "reviewed_by": "Thinura",
+            "review_comment": "Approved for timeline test.",
+        },
+    )
+
+    assert approve_response.status_code == 200
+
+    execute_response = client.post(f"/api/v1/approvals/{approval_id}/execute")
+
+    assert execute_response.status_code == 200
+
+    timeline_response = client.get(f"/api/v1/candidates/{candidate_id}/timeline")
+
+    assert timeline_response.status_code == 200
+
+    data = timeline_response.json()
+
+    assert data["summary"]["candidate_id"] == candidate_id
+    assert data["summary"]["outbox_message_count"] == 1
+    assert data["summary"]["sent_outbox_message_count"] == 0
+
+    assert len(data["outbox_messages"]) == 1
+    assert data["outbox_messages"][0]["recipient_email"] == candidate["email"]
+    assert data["outbox_messages"][0]["subject"] == "Application update"
+    assert data["outbox_messages"][0]["status"] == "pending"

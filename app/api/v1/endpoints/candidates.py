@@ -8,6 +8,7 @@ from app.models.approval_request import ApprovalRequest, ApprovalStatus
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.candidate import Candidate, CandidateStatus
 from app.models.document import Document, DocumentType
+from app.models.outbox_message import OutboxMessage, OutboxMessageStatus
 from app.schemas.candidate import (
     CandidateCreate,
     CandidateResponse,
@@ -194,6 +195,13 @@ def get_candidate_timeline(
         .all()
     )
 
+    outbox_messages = (
+        db.query(OutboxMessage)
+        .filter(OutboxMessage.candidate_id == candidate.id)
+        .order_by(OutboxMessage.created_at.asc())
+        .all()
+    )
+
     summary = CandidateTimelineSummary(
         candidate_id=candidate.id,
         has_cv=candidate.cv_document_id is not None,
@@ -205,6 +213,12 @@ def get_candidate_timeline(
             for approval_request in approval_requests
             if approval_request.status == ApprovalStatus.PENDING
         ),
+        outbox_message_count=len(outbox_messages),
+        sent_outbox_message_count=sum(
+            1
+            for outbox_message in outbox_messages
+            if outbox_message.status == OutboxMessageStatus.SENT
+        ),
     )
 
     return CandidateTimelineResponse(
@@ -214,6 +228,7 @@ def get_candidate_timeline(
         audit_logs=audit_logs,
         agent_runs=agent_runs,
         approval_requests=approval_requests,
+        outbox_messages=outbox_messages,
     )
 
 

@@ -241,8 +241,9 @@ def execute_request(
 
         execution_result = {
             "mode": "outbox",
-            "message": "Email draft execution recorded in outbox."
-            "Real email sending is not enabled yet.",
+            "message": (
+                "Email draft execution recorded in outbox. Real email sending is not enabled yet."
+            ),
             "executed": True,
             "action_type": approval_request.action_type.value,
             "outbox_message_id": str(outbox_message.id),

@@ -5,6 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.candidate import CandidateStatus
+from app.models.outbox_message import OutboxMessageStatus
 
 
 class CandidateCreate(BaseModel):
@@ -106,6 +107,24 @@ class CandidateTimelineSummary(BaseModel):
     agent_run_count: int
     approval_request_count: int
     pending_approval_count: int
+    outbox_message_count: int
+    sent_outbox_message_count: int
+
+
+class CandidateTimelineOutboxMessageResponse(BaseModel):
+    id: UUID
+    approval_request_id: UUID | None
+    candidate_id: UUID | None
+    recipient_email: EmailStr | None
+    subject: str | None
+    body: str
+    status: OutboxMessageStatus
+    provider_message_id: str | None
+    error_message: str | None
+    created_at: datetime
+    sent_at: datetime | None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CandidateTimelineResponse(BaseModel):
@@ -115,3 +134,4 @@ class CandidateTimelineResponse(BaseModel):
     audit_logs: list[CandidateTimelineAuditLogResponse]
     agent_runs: list[CandidateTimelineAgentRunResponse]
     approval_requests: list[CandidateTimelineApprovalResponse]
+    outbox_messages: list[CandidateTimelineOutboxMessageResponse]
