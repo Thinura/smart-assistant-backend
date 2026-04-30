@@ -1,5 +1,8 @@
 TEST_DATABASE_URL=postgresql+psycopg://smart_user:smart_password@localhost:5432/smart_assistant_test
 
+docker-compose-up:
+	docker-compose up -d
+
 migrate:
 	poetry run alembic upgrade head
 
@@ -21,3 +24,6 @@ fix:
 
 format:
 	poetry run ruff format .
+
+run:
+	poetry run uvicorn app.main:app --reload

@@ -3,12 +3,17 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import DbSession
-from app.models.audit_log import AuditEventType
+from app.models.agent_run import AgentRun
+from app.models.approval_request import ApprovalRequest, ApprovalStatus
+from app.models.audit_log import AuditEventType, AuditLog
 from app.models.candidate import Candidate, CandidateStatus
 from app.models.document import Document, DocumentType
 from app.schemas.candidate import (
     CandidateCreate,
     CandidateResponse,
+    CandidateStatusUpdate,
+    CandidateTimelineResponse,
+    CandidateTimelineSummary,
     CandidateUpdate,
 )
 from app.services.audit_log_service import AuditLogService
@@ -106,6 +111,108 @@ def get_candidate(
         )
 
     return candidate
+
+@router.post("/{candidate_id}/status", response_model=CandidateResponse)
+def update_candidate_status(
+    candidate_id: UUID,
+    payload: CandidateStatusUpdate,
+    db: DbSession,
+) -> Candidate:
+    candidate = db.get(Candidate, candidate_id)
+
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+
+    previous_status = candidate.status
+    candidate.status = payload.status
+
+    db.flush()
+
+    AuditLogService(db).record(
+        event_type=AuditEventType.CANDIDATE_UPDATED,
+        entity_type="candidate",
+        entity_id=str(candidate.id),
+        actor=payload.updated_by,
+        metadata={
+            "updated_fields": ["status"],
+            "previous_status": previous_status.value,
+            "new_status": candidate.status.value,
+            "reason": payload.reason,
+        },
+    )
+
+    db.commit()
+    db.refresh(candidate)
+
+    return candidate
+
+@router.get("/{candidate_id}/timeline", response_model=CandidateTimelineResponse)
+def get_candidate_timeline(
+    candidate_id: UUID,
+    db: DbSession,
+) -> CandidateTimelineResponse:
+    candidate = db.get(Candidate, candidate_id)
+
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+
+    candidate_id_text = str(candidate.id)
+
+    cv_document = None
+    if candidate.cv_document_id is not None:
+        cv_document = db.get(Document, candidate.cv_document_id)
+
+    audit_logs = (
+        db.query(AuditLog)
+        .filter(
+            AuditLog.entity_type == "candidate",
+            AuditLog.entity_id == candidate_id_text,
+        )
+        .order_by(AuditLog.created_at.asc())
+        .all()
+    )
+
+    agent_runs = (
+        db.query(AgentRun)
+        .filter(AgentRun.run_metadata["sources"].astext.contains(candidate_id_text))
+        .order_by(AgentRun.started_at.asc())
+        .all()
+    )
+
+    approval_requests = (
+        db.query(ApprovalRequest)
+        .filter(ApprovalRequest.action_payload["candidate_id"].astext == candidate_id_text)
+        .order_by(ApprovalRequest.created_at.asc())
+        .all()
+    )
+
+    summary = CandidateTimelineSummary(
+        candidate_id=candidate.id,
+        has_cv=candidate.cv_document_id is not None,
+        audit_log_count=len(audit_logs),
+        agent_run_count=len(agent_runs),
+        approval_request_count=len(approval_requests),
+        pending_approval_count=sum(
+            1
+            for approval_request in approval_requests
+            if approval_request.status == ApprovalStatus.PENDING
+        ),
+    )
+
+    return CandidateTimelineResponse(
+        summary=summary,
+        candidate=candidate,
+        cv_document=cv_document,
+        audit_logs=audit_logs,
+        agent_runs=agent_runs,
+        approval_requests=approval_requests,
+    )
 
 
 @router.patch("/{candidate_id}", response_model=CandidateResponse)

@@ -133,3 +133,54 @@ def test_get_candidate_returns_404_for_missing_candidate(client: TestClient) -> 
     response = client.get("/api/v1/candidates/00000000-0000-0000-0000-000000000000")
 
     assert response.status_code == 404
+
+
+def test_get_candidate_timeline(client: TestClient) -> None:
+    create_response = client.post(
+        "/api/v1/candidates",
+        json={
+            "full_name": "Timeline Candidate",
+            "email": "timeline.candidate@example.com",
+            "role_applied_for": "QA Intern",
+        },
+    )
+
+    assert create_response.status_code == 201
+
+    candidate_id = create_response.json()["id"]
+
+    status_response = client.post(
+        f"/api/v1/candidates/{candidate_id}/status",
+        json={
+            "status": "shortlisted",
+            "reason": "Timeline test status change.",
+            "updated_by": "Thinura",
+        },
+    )
+
+    assert status_response.status_code == 200
+
+    response = client.get(f"/api/v1/candidates/{candidate_id}/timeline")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["summary"]["candidate_id"] == candidate_id
+    assert data["summary"]["has_cv"] is False
+    assert data["summary"]["audit_log_count"] >= 2
+    assert data["candidate"]["id"] == candidate_id
+    assert data["cv_document"] is None
+
+    event_types = [log["event_type"] for log in data["audit_logs"]]
+
+    assert "candidate.created" in event_types
+    assert "candidate.updated" in event_types
+
+
+def test_get_candidate_timeline_returns_404_for_missing_candidate(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/v1/candidates/00000000-0000-0000-0000-000000000000/timeline")
+
+    assert response.status_code == 404
