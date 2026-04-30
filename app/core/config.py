@@ -19,7 +19,7 @@ class Settings(BaseSettings):
 
     ollama_base_url: str = "http://localhost:11434"
     default_llm_model: str = "llama3.2:1b"
-    embedding_model: str = "nomic-embed-text"
+    default_embedding_model: str = "nomic-embed-text"
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

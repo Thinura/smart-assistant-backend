@@ -25,10 +25,12 @@ class CandidateUpdate(BaseModel):
     cv_document_id: UUID | None = None
     notes: str | None = None
 
+
 class CandidateStatusUpdate(BaseModel):
     status: CandidateStatus
     reason: str | None = Field(default=None, max_length=1000)
     updated_by: str = Field(default="system", max_length=255)
+
 
 class CandidateResponse(BaseModel):
     id: UUID

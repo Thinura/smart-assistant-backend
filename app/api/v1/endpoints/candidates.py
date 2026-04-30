@@ -112,6 +112,7 @@ def get_candidate(
 
     return candidate
 
+
 @router.post("/{candidate_id}/status", response_model=CandidateResponse)
 def update_candidate_status(
     candidate_id: UUID,
@@ -148,6 +149,7 @@ def update_candidate_status(
     db.refresh(candidate)
 
     return candidate
+
 
 @router.get("/{candidate_id}/timeline", response_model=CandidateTimelineResponse)
 def get_candidate_timeline(

@@ -46,6 +46,22 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
+  ollama-pull:
+    image: ollama/ollama:latest
+    container_name: smart-assistant-ollama-pull
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: >
+      "sleep 5 &&
+      ollama pull nomic-embed-text &&
+      ollama pull llama3.2:1b"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: "no"
+
 volumes:
   postgres_data:
   redis_data:
