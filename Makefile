@@ -27,3 +27,12 @@ format:
 
 run:
 	poetry run uvicorn app.main:app --reload
+
+reset-test-db:
+	docker exec -it smart-assistant-postgres psql -U smart_user -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'smart_assistant_test';"
+	docker exec -it smart-assistant-postgres psql -U smart_user -d postgres -c "DROP DATABASE IF EXISTS smart_assistant_test;"
+	docker exec -it smart-assistant-postgres psql -U smart_user -d postgres -c "CREATE DATABASE smart_assistant_test OWNER smart_user;"
+
+reset-test-db-migrate:
+	make reset-test-db
+	make migrate-test

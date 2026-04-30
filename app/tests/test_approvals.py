@@ -43,9 +43,23 @@ def test_create_approve_and_execute_approval_request(client: TestClient) -> None
     assert execute_response.status_code == 200
 
     executed = execute_response.json()
+
     assert executed["status"] == "executed"
     assert executed["execution_result"]["executed"] is True
-    assert executed["execution_result"]["mode"] == "dry_run"
+    assert executed["execution_result"]["mode"] == "outbox"
+    assert executed["execution_result"]["outbox_message_id"] is not None
+
+    outbox_message_id = executed["execution_result"]["outbox_message_id"]
+
+    outbox_response = client.get(f"/api/v1/outbox/{outbox_message_id}")
+
+    assert outbox_response.status_code == 200
+
+    outbox_data = outbox_response.json()
+
+    assert outbox_data["approval_request_id"] == approval_id
+    assert outbox_data["body"] == "Testing approval."
+    assert outbox_data["status"] == "pending"
 
 
 def test_reject_only_pending_approval_request(client: TestClient) -> None:

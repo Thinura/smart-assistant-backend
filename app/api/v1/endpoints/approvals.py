@@ -14,6 +14,7 @@ from app.schemas.approval_request import (
 )
 from app.services.approval_execution_service import ApprovalExecutionService
 from app.services.audit_log_service import AuditLogService
+from app.services.outbox_service import OutboxService
 
 router = APIRouter()
 
@@ -232,6 +233,23 @@ def execute_request(
             detail=str(exc),
         ) from exc
 
+    if approval_request.action_type.value == "email_draft":
+        outbox_message = OutboxService(db).create_from_email_approval(
+            approval_request_id=approval_request.id,
+            action_payload=approval_request.action_payload,
+        )
+
+        execution_result = {
+            "mode": "outbox",
+            "message": "Email draft execution recorded in outbox."
+            "Real email sending is not enabled yet.",
+            "executed": True,
+            "action_type": approval_request.action_type.value,
+            "outbox_message_id": str(outbox_message.id),
+            "candidate_id": approval_request.action_payload.get("candidate_id"),
+            "candidate_email": approval_request.action_payload.get("candidate_email"),
+            "subject": approval_request.action_payload.get("subject"),
+        }
     approval_request.status = ApprovalStatus.EXECUTED
     approval_request.execution_result = execution_result
 

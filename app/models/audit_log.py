@@ -21,6 +21,8 @@ class AuditEventType(StrEnum):
     CANDIDATE_UPDATED = "candidate.updated"
     AGENT_RUN_COMPLETED = "agent_run.completed"
     APPROVAL_UPDATED = "approval.updated"
+    OUTBOX_CREATED = "outbox.created"
+    OUTBOX_MARKED_SENT = "outbox.marked_sent"
 
 
 class AuditLog(Base):
