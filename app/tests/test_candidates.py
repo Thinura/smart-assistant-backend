@@ -1,5 +1,7 @@
 from fastapi.testclient import TestClient
 
+from app.tools.candidate_tools import ReviewCandidateTool
+
 
 def test_list_candidates_can_filter_by_status(client: TestClient) -> None:
     new_response = client.post(
@@ -249,3 +251,141 @@ def test_candidate_timeline_includes_outbox_messages(client: TestClient) -> None
     assert data["outbox_messages"][0]["recipient_email"] == candidate["email"]
     assert data["outbox_messages"][0]["subject"] == "Application update"
     assert data["outbox_messages"][0]["status"] == "pending"
+
+
+def test_candidate_timeline_includes_candidate_reviews(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    class FakeStructuredReview:
+        def model_dump(self) -> dict:
+            return {
+                "summary": "Timeline review summary.",
+                "score": 81,
+                "recommendation": "shortlist",
+                "confidence": "high",
+                "strengths": ["manual testing"],
+                "risks": [],
+                "interview_focus_areas": ["bug reporting"],
+            }
+
+    def fake_generate_structured_review(self, candidate, cv_text):
+        return FakeStructuredReview()
+
+    monkeypatch.setattr(
+        ReviewCandidateTool,
+        "_generate_structured_review",
+        fake_generate_structured_review,
+    )
+
+    cv_response = client.post(
+        "/api/v1/documents/upload",
+        files={
+            "file": (
+                "timeline-review-cv.txt",
+                b"QA intern with manual testing and bug reporting.",
+                "text/plain",
+            )
+        },
+        data={"document_type": "cv"},
+    )
+
+    assert cv_response.status_code == 201
+
+    candidate_response = client.post(
+        "/api/v1/candidates",
+        json={
+            "full_name": "Timeline Review Candidate",
+            "email": "timeline.review@example.com",
+            "role_applied_for": "QA Intern",
+            "cv_document_id": cv_response.json()["id"],
+        },
+    )
+
+    assert candidate_response.status_code == 201
+
+    candidate_id = candidate_response.json()["id"]
+
+    review_response = client.post(
+        "/api/v1/tools/review_candidate/run",
+        json={
+            "payload": {
+                "candidate_id": candidate_id,
+                "role": "QA Intern",
+            },
+        },
+    )
+
+    assert review_response.status_code == 200
+    assert review_response.json()["success"] is True
+
+    timeline_response = client.get(f"/api/v1/candidates/{candidate_id}/timeline")
+
+    assert timeline_response.status_code == 200
+
+    data = timeline_response.json()
+
+    assert data["summary"]["candidate_review_count"] == 1
+    assert data["summary"]["latest_review_score"] == 81
+    assert data["summary"]["latest_review_recommendation"] == "shortlist"
+
+    assert len(data["candidate_reviews"]) == 1
+    assert data["candidate_reviews"][0]["candidate_id"] == candidate_id
+    assert data["candidate_reviews"][0]["score"] == 81
+    cv_response = client.post(
+        "/api/v1/documents/upload",
+        files={
+            "file": (
+                "timeline-review-cv.txt",
+                b"QA intern with manual testing and bug reporting.",
+                "text/plain",
+            )
+        },
+        data={"document_type": "cv"},
+    )
+
+    assert cv_response.status_code == 201
+
+    candidate_response = client.post(
+        "/api/v1/candidates",
+        json={
+            "full_name": "Timeline Review Candidate",
+            "email": "timeline.review@example.com",
+            "role_applied_for": "QA Intern",
+            "cv_document_id": cv_response.json()["id"],
+        },
+    )
+
+    assert candidate_response.status_code == 201
+
+    candidate_id = candidate_response.json()["id"]
+
+    review_response = client.post(
+        "/api/v1/tools/review_candidate/run",
+        json={
+            "payload": {
+                "candidate_id": candidate_id,
+                "role": "QA Intern",
+            },
+        },
+    )
+
+    assert review_response.status_code == 200
+    assert review_response.json()["success"] is True
+
+    timeline_response = client.get(f"/api/v1/candidates/{candidate_id}/timeline")
+
+    assert timeline_response.status_code == 200
+
+    data = timeline_response.json()
+
+    assert data["summary"]["candidate_review_count"] == 1
+    assert data["summary"]["latest_review_score"] is not None
+    assert data["summary"]["latest_review_recommendation"] in [
+        "shortlist",
+        "hold",
+        "reject",
+    ]
+
+    assert len(data["candidate_reviews"]) == 1
+    assert data["candidate_reviews"][0]["candidate_id"] == candidate_id

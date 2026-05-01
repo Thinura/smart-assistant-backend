@@ -204,6 +204,15 @@ def get_candidate_timeline(
         .all()
     )
 
+    candidate_reviews = (
+        db.query(CandidateReview)
+        .filter(CandidateReview.candidate_id == candidate.id)
+        .order_by(CandidateReview.created_at.desc())
+        .all()
+    )
+
+    latest_review = candidate_reviews[0] if candidate_reviews else None
+
     summary = CandidateTimelineSummary(
         candidate_id=candidate.id,
         has_cv=candidate.cv_document_id is not None,
@@ -221,6 +230,9 @@ def get_candidate_timeline(
             for outbox_message in outbox_messages
             if outbox_message.status == OutboxMessageStatus.SENT
         ),
+        candidate_review_count=len(candidate_reviews),
+        latest_review_score=latest_review.score if latest_review else None,
+        latest_review_recommendation=latest_review.recommendation if latest_review else None,
     )
 
     return CandidateTimelineResponse(
@@ -231,6 +243,7 @@ def get_candidate_timeline(
         agent_runs=agent_runs,
         approval_requests=approval_requests,
         outbox_messages=outbox_messages,
+        candidate_reviews=candidate_reviews,
     )
 
 

@@ -7,6 +7,7 @@ from app.api.v1.endpoints.candidate_reviews import router as candidate_reviews_r
 from app.api.v1.endpoints.candidates import router as candidates_router
 from app.api.v1.endpoints.chat import router as chat_router
 from app.api.v1.endpoints.conversations import router as conversations_router
+from app.api.v1.endpoints.dashboard import router as dashboard_router
 from app.api.v1.endpoints.documents import router as documents_router
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.outbox import router as outbox_router
@@ -78,4 +79,10 @@ api_router.include_router(
     candidate_reviews_router,
     prefix="/candidate-reviews",
     tags=["candidate-reviews"],
+)
+
+api_router.include_router(
+    dashboard_router,
+    prefix="/dashboard",
+    tags=["dashboard"],
 )

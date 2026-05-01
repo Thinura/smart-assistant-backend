@@ -5,6 +5,10 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.candidate import CandidateStatus
+from app.models.candidate_review import (
+    CandidateReviewConfidence,
+    CandidateReviewRecommendation,
+)
 from app.models.outbox_message import OutboxMessageStatus
 
 
@@ -109,6 +113,9 @@ class CandidateTimelineSummary(BaseModel):
     pending_approval_count: int
     outbox_message_count: int
     sent_outbox_message_count: int
+    candidate_review_count: int
+    latest_review_score: int | None
+    latest_review_recommendation: CandidateReviewRecommendation | None
 
 
 class CandidateTimelineOutboxMessageResponse(BaseModel):
@@ -127,6 +134,25 @@ class CandidateTimelineOutboxMessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CandidateTimelineReviewResponse(BaseModel):
+    id: UUID
+    candidate_id: UUID
+    agent_run_id: UUID | None
+    cv_document_id: UUID | None
+    role_applied_for: str | None
+    summary: str
+    score: int | None
+    recommendation: CandidateReviewRecommendation
+    confidence: CandidateReviewConfidence
+    strengths: list[str]
+    risks: list[str]
+    interview_focus_areas: list[str]
+    source_metadata: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CandidateTimelineResponse(BaseModel):
     summary: CandidateTimelineSummary
     candidate: CandidateResponse
@@ -135,3 +161,4 @@ class CandidateTimelineResponse(BaseModel):
     agent_runs: list[CandidateTimelineAgentRunResponse]
     approval_requests: list[CandidateTimelineApprovalResponse]
     outbox_messages: list[CandidateTimelineOutboxMessageResponse]
+    candidate_reviews: list[CandidateTimelineReviewResponse]
