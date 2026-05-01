@@ -24,8 +24,27 @@ class ReviewCandidateTool(BaseTool):
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def _parse_optional_uuid(self, value: Any) -> UUID | None:
+        if value is None:
+            return None
+
+        try:
+            return UUID(str(value))
+        except ValueError:
+            return None
+
+    def _parse_candidate_id(self, value: Any) -> UUID | None:
+        if value is None:
+            return None
+
+        try:
+            return UUID(str(value))
+        except ValueError:
+            return None
+
     def run(self, payload: dict[str, Any]) -> ToolResult:
         candidate_id = self._parse_candidate_id(payload.get("candidate_id"))
+        agent_run_id = self._parse_optional_uuid(payload.get("agent_run_id"))
 
         if candidate_id is None:
             return ToolResult(
@@ -86,7 +105,7 @@ class ReviewCandidateTool(BaseTool):
         persisted_review = CandidateReviewService(self.db).create_review(
             CandidateReviewCreate(
                 candidate_id=candidate.id,
-                agent_run_id=None,
+                agent_run_id=agent_run_id,
                 cv_document_id=candidate.cv_document_id,
                 role_applied_for=candidate.role_applied_for,
                 summary=review_data["summary"],
@@ -121,6 +140,7 @@ class ReviewCandidateTool(BaseTool):
                 },
                 "review": review_data,
                 "candidate_review_id": str(persisted_review.id),
+                "agent_run_id": str(agent_run_id) if agent_run_id else None,
             },
         )
 
@@ -176,15 +196,6 @@ class ReviewCandidateTool(BaseTool):
             raise RuntimeError(
                 f"Candidate review model returned invalid structured output: {raw_content}"
             ) from exc
-
-    def _parse_candidate_id(self, value: Any) -> UUID | None:
-        if value is None:
-            return None
-
-        try:
-            return UUID(str(value))
-        except ValueError:
-            return None
 
     def _parse_review_json(self, content: str) -> dict[str, Any]:
         cleaned_content = content.strip()

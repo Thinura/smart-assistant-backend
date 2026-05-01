@@ -170,12 +170,15 @@ def handle_candidate_review(state: AgentState) -> AgentState:
                 ),
             }
 
+        agent_run_id = state.get("agent_run_id")
+
         result, tool_call = tool_execution_service.run_tool(
             tool_name="review_candidate",
             payload={
                 "candidate_id": str(candidate_id),
+                "agent_run_id": str(agent_run_id) if agent_run_id else None,
             },
-            agent_run_id=state.get("agent_run_id"),
+            agent_run_id=agent_run_id,
         )
 
         tool_result = {
