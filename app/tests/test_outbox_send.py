@@ -87,4 +87,85 @@ def test_send_outbox_message_rejects_non_pending_message(client: TestClient) -> 
     second_send_response = client.post(f"/api/v1/outbox/{outbox_message_id}/send")
 
     assert second_send_response.status_code == 400
-    assert second_send_response.json()["detail"] == "Only pending outbox messages can be sent"
+    assert second_send_response.json()["detail"] == (
+        "Only pending or failed outbox messages can be sent"
+    )
+
+
+def test_send_failed_outbox_message_can_be_retried(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    from app.services.email_providers.base import EmailSendResult
+    from app.services.email_providers.console_provider import ConsoleEmailProvider
+
+    call_count = {"count": 0}
+
+    def fake_send(self, message):
+        call_count["count"] += 1
+
+        if call_count["count"] == 1:
+            return EmailSendResult(
+                success=False,
+                error_message="Temporary SMTP failure",
+            )
+
+        return EmailSendResult(
+            success=True,
+            provider_message_id="retry-success-001",
+        )
+
+    monkeypatch.setattr(ConsoleEmailProvider, "send", fake_send)
+
+    approval_response = client.post(
+        "/api/v1/approvals",
+        json={
+            "action_type": "email_draft",
+            "title": "Retry outbox test",
+            "action_payload": {
+                "candidate_email": "retry.test@example.com",
+                "subject": "Retry test",
+                "draft_body": "This is a retry test.",
+            },
+        },
+    )
+
+    assert approval_response.status_code == 201
+
+    approval_id = approval_response.json()["id"]
+
+    approve_response = client.post(
+        f"/api/v1/approvals/{approval_id}/approve",
+        json={
+            "reviewed_by": "Thinura",
+            "review_comment": "Approved.",
+        },
+    )
+
+    assert approve_response.status_code == 200
+
+    execute_response = client.post(f"/api/v1/approvals/{approval_id}/execute")
+
+    assert execute_response.status_code == 200
+
+    outbox_message_id = execute_response.json()["execution_result"]["outbox_message_id"]
+
+    first_send_response = client.post(f"/api/v1/outbox/{outbox_message_id}/send")
+
+    assert first_send_response.status_code == 200
+
+    failed_data = first_send_response.json()
+
+    assert failed_data["status"] == "failed"
+    assert failed_data["error_message"] == "Temporary SMTP failure"
+
+    retry_response = client.post(f"/api/v1/outbox/{outbox_message_id}/send")
+
+    assert retry_response.status_code == 200
+
+    retry_data = retry_response.json()
+
+    assert retry_data["status"] == "sent"
+    assert retry_data["provider_message_id"] == "retry-success-001"
+    assert retry_data["error_message"] is None
+    assert retry_data["sent_at"] is not None

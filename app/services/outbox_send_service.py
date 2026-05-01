@@ -22,12 +22,18 @@ class OutboxSendService:
         if outbox_message is None:
             raise ValueError("Outbox message not found")
 
-        if outbox_message.status != OutboxMessageStatus.PENDING:
-            raise ValueError("Only pending outbox messages can be sent")
+        if outbox_message.status not in {
+            OutboxMessageStatus.PENDING,
+            OutboxMessageStatus.FAILED,
+        }:
+            raise ValueError("Only pending or failed outbox messages can be sent")
 
         if not outbox_message.recipient_email:
             raise ValueError("Outbox message does not have a recipient email")
 
+        outbox_message.error_message = None
+
+        self.db.flush()
         provider = EmailProviderFactory.create()
 
         result = provider.send(

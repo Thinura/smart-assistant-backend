@@ -31,6 +31,7 @@ def upgrade() -> None:
         """
     )
 
+
 def downgrade() -> None:
     """Downgrade schema."""
     pass
