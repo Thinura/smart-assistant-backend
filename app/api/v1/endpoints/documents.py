@@ -10,8 +10,10 @@ from app.models.document import Document, DocumentStatus, DocumentType
 from app.models.document_chunk import DocumentChunk
 from app.schemas.document import DocumentDetailResponse, DocumentListResponse
 from app.schemas.document_chunk import DocumentChunkResponse
+from app.schemas.document_search import DocumentSearchRequest, DocumentSearchResponse
 from app.services.audit_log_service import AuditLogService
 from app.services.document_chunking_service import DocumentChunkingService
+from app.services.document_search_service import DocumentSearchService
 from app.services.document_text_extraction_service import DocumentTextExtractionService
 from app.services.embedding_service import EmbeddingService
 
@@ -132,6 +134,24 @@ async def upload_document(
     db.refresh(document)
 
     return document
+
+
+@router.post("/search", response_model=DocumentSearchResponse)
+def search_documents(
+    payload: DocumentSearchRequest,
+    db: DbSession,
+) -> DocumentSearchResponse:
+    results = DocumentSearchService(db).search(
+        query=payload.query,
+        document_type=payload.document_type,
+        limit=payload.limit,
+    )
+
+    return DocumentSearchResponse(
+        query=payload.query,
+        result_count=len(results),
+        results=results,
+    )
 
 
 @router.get("/{document_id}/chunks", response_model=list[DocumentChunkResponse])
