@@ -26,6 +26,9 @@ class AuditEventType(StrEnum):
     CANDIDATE_REVIEW_CREATED = "candidate_review.created"
     CANDIDATE_JOB_MATCH_CREATED = "candidate_job_match.created"
     INTERVIEW_KIT_CREATED = "interview_kit.created"
+    EMAIL_TEMPLATE_CREATED = "email_template.created"
+    EMAIL_TEMPLATE_UPDATED = "email_template.updated"
+    EMAIL_TEMPLATE_RENDERED = "email_template.rendered"
 
 
 class AuditLog(Base):

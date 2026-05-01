@@ -9,6 +9,7 @@ from app.api.v1.endpoints.chat import router as chat_router
 from app.api.v1.endpoints.conversations import router as conversations_router
 from app.api.v1.endpoints.dashboard import router as dashboard_router
 from app.api.v1.endpoints.documents import router as documents_router
+from app.api.v1.endpoints.email_templates import router as email_templates_router
 from app.api.v1.endpoints.health import router as health_router
 from app.api.v1.endpoints.interview_kits import router as interview_kits_router
 from app.api.v1.endpoints.outbox import router as outbox_router
@@ -92,4 +93,10 @@ api_router.include_router(
     interview_kits_router,
     prefix="/interview-kits",
     tags=["interview-kits"],
+)
+
+api_router.include_router(
+    email_templates_router,
+    prefix="/email-templates",
+    tags=["email-templates"],
 )
