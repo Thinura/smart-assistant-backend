@@ -11,6 +11,9 @@ from app.models.candidate import Candidate
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
 from app.schemas.candidate_review import CandidateReviewCreate
+from app.services.candidate_pipeline_automation_service import (
+    CandidatePipelineAutomationService,
+)
 from app.services.candidate_review_service import CandidateReviewService
 from app.services.chat_model_service import get_chat_model
 from app.tools.base import BaseTool, ToolResult
@@ -123,6 +126,10 @@ class ReviewCandidateTool(BaseTool):
             )
         )
 
+        CandidatePipelineAutomationService(self.db).handle_candidate_review_created(
+            candidate=candidate,
+            review=persisted_review,
+        )
         self.db.commit()
         self.db.refresh(persisted_review)
 
