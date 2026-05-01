@@ -11,6 +11,7 @@ from app.schemas.approval_request import (
     ApprovalRequestResponse,
     ApprovalRequestUpdate,
     ApprovalReviewRequest,
+    ApprovalTemplateRenderRequest,
 )
 from app.services.approval_execution_service import ApprovalExecutionService
 from app.services.approval_request_service import ApprovalRequestService
@@ -69,6 +70,35 @@ def list_approval_requests(
         query = query.filter(ApprovalRequest.status == status_filter)
 
     return query.order_by(ApprovalRequest.created_at.desc()).limit(limit).all()
+
+
+@router.post(
+    "/{approval_request_id}/render-template",
+    response_model=ApprovalRequestResponse,
+)
+def render_approval_template(
+    approval_request_id: UUID,
+    payload: ApprovalTemplateRenderRequest,
+    db: DbSession,
+) -> ApprovalRequest:
+    approval_request = db.get(ApprovalRequest, approval_request_id)
+
+    if approval_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Approval request not found",
+        )
+
+    try:
+        return ApprovalRequestService(db).render_template_for_request(
+            approval_request=approval_request,
+            variables=payload.variables,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
 
 
 @router.patch("/{approval_request_id}", response_model=ApprovalRequestResponse)

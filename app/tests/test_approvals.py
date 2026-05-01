@@ -191,3 +191,328 @@ def test_update_approval_request_rejects_non_pending_request(
 
     assert update_response.status_code == 400
     assert update_response.json()["detail"] == ("Only pending approval requests can be updated")
+
+
+def test_render_approval_template_updates_subject_and_body(
+    client: TestClient,
+) -> None:
+    template_response = client.post(
+        "/api/v1/email-templates",
+        json={
+            "name": "Approval Render Interview Template",
+            "template_type": "interview_invite",
+            "subject_template": "Interview Invitation - {{ role_name }} at {{ company_name }}",
+            "body_template": (
+                "Hi {{ candidate_name }},\n\n"
+                "Interview for {{ role_name }} at {{ company_name }}.\n\n"
+                "Date: {{ interview_date }}\n"
+                "Time: {{ interview_time }}\n"
+                "Link: {{ interview_link }}\n\n"
+                "{{ recruiter_name }}"
+            ),
+            "required_variables": [
+                "candidate_name",
+                "role_name",
+                "company_name",
+                "interview_date",
+                "interview_time",
+                "interview_link",
+                "recruiter_name",
+            ],
+            "optional_variables": [],
+            "is_active": True,
+        },
+    )
+
+    assert template_response.status_code == 201
+
+    template_id = template_response.json()["id"]
+
+    approval_response = client.post(
+        "/api/v1/approvals",
+        json={
+            "action_type": "email_draft",
+            "title": "Render approval template test",
+            "action_payload": {
+                "candidate_id": "test-candidate-id",
+                "candidate_email": "candidate@example.com",
+                "email_type": "interview_invite",
+                "template_id": template_id,
+                "template_name": "Approval Render Interview Template",
+                "template_variables": {
+                    "candidate_name": "Nimal Perera",
+                    "role_name": "QA Intern",
+                },
+                "missing_template_variables": [
+                    "company_name",
+                    "interview_date",
+                    "interview_time",
+                    "interview_link",
+                    "recruiter_name",
+                ],
+                "subject": "Interview invitation for QA Intern",
+                "draft_body": "Scheduling details required.",
+            },
+        },
+    )
+
+    assert approval_response.status_code == 201
+
+    approval_id = approval_response.json()["id"]
+
+    render_response = client.post(
+        f"/api/v1/approvals/{approval_id}/render-template",
+        json={
+            "variables": {
+                "company_name": "Expernetic",
+                "interview_date": "10 May 2026",
+                "interview_time": "10:00 AM",
+                "interview_link": "https://meet.google.com/test",
+                "recruiter_name": "Thinura",
+            }
+        },
+    )
+
+    assert render_response.status_code == 200
+
+    data = render_response.json()
+
+    assert data["action_payload"]["subject"] == ("Interview Invitation - QA Intern at Expernetic")
+    assert "Hi Nimal Perera" in data["action_payload"]["draft_body"]
+    assert "10 May 2026" in data["action_payload"]["draft_body"]
+    assert "https://meet.google.com/test" in data["action_payload"]["draft_body"]
+    assert "missing_template_variables" not in data["action_payload"]
+
+
+def test_render_approval_template_returns_400_when_variables_missing(
+    client: TestClient,
+) -> None:
+    template_response = client.post(
+        "/api/v1/email-templates",
+        json={
+            "name": "Approval Render Missing Template",
+            "template_type": "interview_invite",
+            "subject_template": "Interview - {{ role_name }}",
+            "body_template": "Hi {{ candidate_name }}, Date: {{ interview_date }}",
+            "required_variables": [
+                "candidate_name",
+                "role_name",
+                "interview_date",
+            ],
+            "optional_variables": [],
+            "is_active": True,
+        },
+    )
+
+    assert template_response.status_code == 201
+
+    approval_response = client.post(
+        "/api/v1/approvals",
+        json={
+            "action_type": "email_draft",
+            "title": "Render missing approval template test",
+            "action_payload": {
+                "candidate_email": "candidate@example.com",
+                "email_type": "interview_invite",
+                "template_id": template_response.json()["id"],
+                "template_variables": {
+                    "candidate_name": "Nimal Perera",
+                    "role_name": "QA Intern",
+                },
+                "subject": "Interview invite",
+                "draft_body": "Missing date.",
+            },
+        },
+    )
+
+    assert approval_response.status_code == 201
+
+    approval_id = approval_response.json()["id"]
+
+    render_response = client.post(
+        f"/api/v1/approvals/{approval_id}/render-template",
+        json={"variables": {}},
+    )
+
+    assert render_response.status_code == 400
+    assert "interview_date" in render_response.json()["detail"]
+
+
+def test_render_approval_template_then_approve_and_execute_creates_outbox(
+    client: TestClient,
+) -> None:
+    template_response = client.post(
+        "/api/v1/email-templates",
+        json={
+            "name": "Render Execute Interview Template",
+            "template_type": "interview_invite",
+            "subject_template": "Interview Invitation - {{ role_name }} at {{ company_name }}",
+            "body_template": (
+                "Hi {{ candidate_name }},\n\n"
+                "Interview for {{ role_name }} at {{ company_name }}.\n\n"
+                "Date: {{ interview_date }}\n"
+                "Time: {{ interview_time }}\n"
+                "Link: {{ interview_link }}\n\n"
+                "{{ recruiter_name }}"
+            ),
+            "required_variables": [
+                "candidate_name",
+                "role_name",
+                "company_name",
+                "interview_date",
+                "interview_time",
+                "interview_link",
+                "recruiter_name",
+            ],
+            "optional_variables": [],
+            "is_active": True,
+        },
+    )
+
+    assert template_response.status_code == 201
+
+    approval_response = client.post(
+        "/api/v1/approvals",
+        json={
+            "action_type": "email_draft",
+            "title": "Render execute approval test",
+            "action_payload": {
+                "candidate_id": "test-candidate-id",
+                "candidate_email": "candidate@example.com",
+                "email_type": "interview_invite",
+                "template_id": template_response.json()["id"],
+                "template_variables": {
+                    "candidate_name": "Nimal Perera",
+                    "role_name": "QA Intern",
+                },
+                "subject": "Interview invite draft",
+                "draft_body": "Scheduling details required.",
+            },
+        },
+    )
+
+    assert approval_response.status_code == 201
+
+    approval_id = approval_response.json()["id"]
+
+    render_response = client.post(
+        f"/api/v1/approvals/{approval_id}/render-template",
+        json={
+            "variables": {
+                "company_name": "Expernetic",
+                "interview_date": "10 May 2026",
+                "interview_time": "10:00 AM",
+                "interview_link": "https://meet.google.com/test",
+                "recruiter_name": "Thinura",
+            }
+        },
+    )
+
+    assert render_response.status_code == 200
+
+    rendered_payload = render_response.json()["action_payload"]
+
+    assert rendered_payload["subject"] == "Interview Invitation - QA Intern at Expernetic"
+    assert "Hi Nimal Perera" in rendered_payload["draft_body"]
+    assert "10 May 2026" in rendered_payload["draft_body"]
+
+    approve_response = client.post(
+        f"/api/v1/approvals/{approval_id}/approve",
+        json={
+            "reviewed_by": "Thinura",
+            "review_comment": "Approved after rendering.",
+        },
+    )
+
+    assert approve_response.status_code == 200
+    assert approve_response.json()["status"] == "approved"
+
+    execute_response = client.post(f"/api/v1/approvals/{approval_id}/execute")
+
+    assert execute_response.status_code == 200
+
+    executed = execute_response.json()
+
+    assert executed["status"] == "executed"
+    assert executed["execution_result"]["mode"] == "outbox"
+
+    outbox_message_id = executed["execution_result"]["outbox_message_id"]
+
+    outbox_response = client.get(f"/api/v1/outbox/{outbox_message_id}")
+
+    assert outbox_response.status_code == 200
+
+    outbox = outbox_response.json()
+
+    assert outbox["recipient_email"] == "candidate@example.com"
+    assert outbox["subject"] == "Interview Invitation - QA Intern at Expernetic"
+    assert "Hi Nimal Perera" in outbox["body"]
+    assert outbox["status"] == "pending"
+
+
+def test_render_approval_template_rejects_non_pending_request(
+    client: TestClient,
+) -> None:
+    template_response = client.post(
+        "/api/v1/email-templates",
+        json={
+            "name": "Render Lock Template",
+            "template_type": "interview_invite",
+            "subject_template": "Interview - {{ role_name }}",
+            "body_template": "Hi {{ candidate_name }}, Date: {{ interview_date }}",
+            "required_variables": [
+                "candidate_name",
+                "role_name",
+                "interview_date",
+            ],
+            "optional_variables": [],
+            "is_active": True,
+        },
+    )
+
+    assert template_response.status_code == 201
+
+    approval_response = client.post(
+        "/api/v1/approvals",
+        json={
+            "action_type": "email_draft",
+            "title": "Render lock approval test",
+            "action_payload": {
+                "candidate_email": "candidate@example.com",
+                "email_type": "interview_invite",
+                "template_id": template_response.json()["id"],
+                "template_variables": {
+                    "candidate_name": "Nimal Perera",
+                    "role_name": "QA Intern",
+                },
+                "subject": "Interview invite",
+                "draft_body": "Missing date.",
+            },
+        },
+    )
+
+    assert approval_response.status_code == 201
+
+    approval_id = approval_response.json()["id"]
+
+    approve_response = client.post(
+        f"/api/v1/approvals/{approval_id}/approve",
+        json={
+            "reviewed_by": "Thinura",
+            "review_comment": "Approved.",
+        },
+    )
+
+    assert approve_response.status_code == 200
+
+    render_response = client.post(
+        f"/api/v1/approvals/{approval_id}/render-template",
+        json={
+            "variables": {
+                "interview_date": "10 May 2026",
+            }
+        },
+    )
+
+    assert render_response.status_code == 400
+    assert render_response.json()["detail"] == ("Only pending approval requests can be rendered")

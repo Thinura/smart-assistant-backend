@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.approval_request import ApprovalActionType, ApprovalStatus
 
 
+class ApprovalTemplateRenderRequest(BaseModel):
+    variables: dict[str, str]
+
+
 class ApprovalRequestCreate(BaseModel):
     agent_run_id: UUID | None = None
     action_type: ApprovalActionType
