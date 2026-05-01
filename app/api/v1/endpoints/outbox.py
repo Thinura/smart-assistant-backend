@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.api.deps import DbSession
 from app.models.outbox_message import OutboxMessage, OutboxMessageStatus
 from app.schemas.outbox_message import (
+    OutboxBulkSendRequest,
+    OutboxBulkSendResponse,
     OutboxMarkSentRequest,
     OutboxMessageResponse,
 )
@@ -37,6 +39,17 @@ def list_outbox_messages(
         query = query.filter(OutboxMessage.status == status_filter)
 
     return query.order_by(OutboxMessage.created_at.desc()).limit(limit).all()
+
+
+@router.post("/send-pending", response_model=OutboxBulkSendResponse)
+def send_pending_outbox_messages(
+    payload: OutboxBulkSendRequest,
+    db: DbSession,
+) -> dict:
+    return OutboxSendService(db).send_pending(
+        limit=payload.limit,
+        include_failed=payload.include_failed,
+    )
 
 
 @router.post("/{outbox_message_id}/send", response_model=OutboxMessageResponse)

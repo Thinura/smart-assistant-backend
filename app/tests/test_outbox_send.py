@@ -169,3 +169,66 @@ def test_send_failed_outbox_message_can_be_retried(
     assert retry_data["provider_message_id"] == "retry-success-001"
     assert retry_data["error_message"] is None
     assert retry_data["sent_at"] is not None
+
+
+def test_bulk_send_pending_outbox_messages(client: TestClient) -> None:
+    outbox_ids = []
+
+    for index in range(2):
+        approval_response = client.post(
+            "/api/v1/approvals",
+            json={
+                "action_type": "email_draft",
+                "title": f"Bulk send test {index}",
+                "action_payload": {
+                    "candidate_email": f"bulk.send.{index}@example.com",
+                    "subject": f"Bulk send test {index}",
+                    "draft_body": f"This is bulk send test {index}.",
+                },
+            },
+        )
+
+        assert approval_response.status_code == 201
+
+        approval_id = approval_response.json()["id"]
+
+        approve_response = client.post(
+            f"/api/v1/approvals/{approval_id}/approve",
+            json={
+                "reviewed_by": "Thinura",
+                "review_comment": "Approved.",
+            },
+        )
+
+        assert approve_response.status_code == 200
+
+        execute_response = client.post(f"/api/v1/approvals/{approval_id}/execute")
+
+        assert execute_response.status_code == 200
+
+        outbox_ids.append(execute_response.json()["execution_result"]["outbox_message_id"])
+
+    response = client.post(
+        "/api/v1/outbox/send-pending",
+        json={
+            "limit": 10,
+            "include_failed": False,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["total"] >= 2
+    assert data["sent_count"] >= 2
+
+    returned_ids = {item["id"] for item in data["results"]}
+
+    for outbox_id in outbox_ids:
+        assert outbox_id in returned_ids
+
+        detail_response = client.get(f"/api/v1/outbox/{outbox_id}")
+
+        assert detail_response.status_code == 200
+        assert detail_response.json()["status"] == "sent"

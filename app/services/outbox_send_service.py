@@ -83,3 +83,56 @@ class OutboxSendService:
         self.db.refresh(outbox_message)
 
         return outbox_message
+
+    def send_pending(
+        self,
+        *,
+        limit: int = 50,
+        include_failed: bool = False,
+    ) -> dict:
+        statuses = [OutboxMessageStatus.PENDING]
+
+        if include_failed:
+            statuses.append(OutboxMessageStatus.FAILED)
+
+        messages = (
+            self.db.query(OutboxMessage)
+            .filter(OutboxMessage.status.in_(statuses))
+            .order_by(OutboxMessage.created_at.asc())
+            .limit(limit)
+            .all()
+        )
+
+        results = []
+
+        for message in messages:
+            try:
+                sent_message = self.send(message.id)
+
+                results.append(
+                    {
+                        "id": str(sent_message.id),
+                        "status": sent_message.status.value,
+                        "provider_message_id": sent_message.provider_message_id,
+                        "error_message": sent_message.error_message,
+                    }
+                )
+            except ValueError as exc:
+                results.append(
+                    {
+                        "id": str(message.id),
+                        "status": message.status.value,
+                        "provider_message_id": message.provider_message_id,
+                        "error_message": str(exc),
+                    }
+                )
+
+        sent_count = sum(1 for item in results if item["status"] == "sent")
+        failed_count = sum(1 for item in results if item["status"] == "failed")
+
+        return {
+            "total": len(results),
+            "sent_count": sent_count,
+            "failed_count": failed_count,
+            "results": results,
+        }
