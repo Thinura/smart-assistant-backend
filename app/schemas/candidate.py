@@ -5,6 +5,10 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.models.candidate import CandidateStatus
+from app.models.candidate_job_match import (
+    CandidateJobMatchConfidence,
+    CandidateJobMatchRecommendation,
+)
 from app.models.candidate_review import (
     CandidateReviewConfidence,
     CandidateReviewRecommendation,
@@ -116,6 +120,9 @@ class CandidateTimelineSummary(BaseModel):
     candidate_review_count: int
     latest_review_score: int | None
     latest_review_recommendation: CandidateReviewRecommendation | None
+    job_match_count: int
+    latest_job_match_score: int | None
+    latest_job_match_recommendation: CandidateJobMatchRecommendation | None
 
 
 class CandidateTimelineOutboxMessageResponse(BaseModel):
@@ -153,6 +160,26 @@ class CandidateTimelineReviewResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CandidateTimelineJobMatchResponse(BaseModel):
+    id: UUID
+    candidate_id: UUID
+    cv_document_id: UUID
+    job_description_document_id: UUID
+    role_name: str | None
+    summary: str
+    match_score: int
+    recommendation: CandidateJobMatchRecommendation
+    confidence: CandidateJobMatchConfidence
+    matched_skills: list[str]
+    missing_skills: list[str]
+    risks: list[str]
+    interview_focus_areas: list[str]
+    source_metadata: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CandidateTimelineResponse(BaseModel):
     summary: CandidateTimelineSummary
     candidate: CandidateResponse
@@ -162,3 +189,4 @@ class CandidateTimelineResponse(BaseModel):
     approval_requests: list[CandidateTimelineApprovalResponse]
     outbox_messages: list[CandidateTimelineOutboxMessageResponse]
     candidate_reviews: list[CandidateTimelineReviewResponse]
+    job_matches: list[CandidateTimelineJobMatchResponse]

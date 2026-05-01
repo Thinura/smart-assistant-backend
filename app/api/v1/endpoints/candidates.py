@@ -273,6 +273,15 @@ def get_candidate_timeline(
 
     latest_review = candidate_reviews[0] if candidate_reviews else None
 
+    job_matches = (
+        db.query(CandidateJobMatch)
+        .filter(CandidateJobMatch.candidate_id == candidate.id)
+        .order_by(CandidateJobMatch.created_at.desc())
+        .all()
+    )
+
+    latest_job_match = job_matches[0] if job_matches else None
+
     summary = CandidateTimelineSummary(
         candidate_id=candidate.id,
         has_cv=candidate.cv_document_id is not None,
@@ -293,6 +302,11 @@ def get_candidate_timeline(
         candidate_review_count=len(candidate_reviews),
         latest_review_score=latest_review.score if latest_review else None,
         latest_review_recommendation=latest_review.recommendation if latest_review else None,
+        job_match_count=len(job_matches),
+        latest_job_match_score=latest_job_match.match_score if latest_job_match else None,
+        latest_job_match_recommendation=(
+            latest_job_match.recommendation if latest_job_match else None
+        ),
     )
 
     return CandidateTimelineResponse(
@@ -304,6 +318,7 @@ def get_candidate_timeline(
         approval_requests=approval_requests,
         outbox_messages=outbox_messages,
         candidate_reviews=candidate_reviews,
+        job_matches=job_matches,
     )
 
 

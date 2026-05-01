@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 
+from app.services import candidate_job_match_service
 from app.tools.candidate_tools import ReviewCandidateTool
 
 
@@ -389,3 +390,98 @@ def test_candidate_timeline_includes_candidate_reviews(
 
     assert len(data["candidate_reviews"]) == 1
     assert data["candidate_reviews"][0]["candidate_id"] == candidate_id
+
+
+def test_candidate_timeline_includes_job_matches(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    class FakeResponse:
+        content = """
+        {
+          "summary": "The candidate is a strong match for the QA Intern role.",
+          "match_score": 86,
+          "matched_skills": ["manual testing", "bug reporting"],
+          "missing_skills": ["advanced automation"],
+          "risks": [],
+          "interview_focus_areas": ["automation basics"],
+          "recommendation": "strong_match",
+          "confidence": "high"
+        }
+        """
+
+    class FakeModel:
+        def invoke(self, messages):
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        candidate_job_match_service,
+        "get_chat_model",
+        lambda: FakeModel(),
+    )
+
+    cv_response = client.post(
+        "/api/v1/documents/upload",
+        files={
+            "file": (
+                "timeline-match-cv.txt",
+                b"Candidate has manual testing and bug reporting experience.",
+                "text/plain",
+            )
+        },
+        data={"document_type": "cv"},
+    )
+
+    assert cv_response.status_code == 201
+
+    jd_response = client.post(
+        "/api/v1/documents/upload",
+        files={
+            "file": (
+                "timeline-match-jd.txt",
+                b"QA Intern role requires manual testing, bug reporting, and basic automation.",
+                "text/plain",
+            )
+        },
+        data={"document_type": "job_description"},
+    )
+
+    assert jd_response.status_code == 201
+
+    candidate_response = client.post(
+        "/api/v1/candidates",
+        json={
+            "full_name": "Timeline Match Candidate",
+            "email": "timeline.match@example.com",
+            "role_applied_for": "QA Intern",
+            "cv_document_id": cv_response.json()["id"],
+        },
+    )
+
+    assert candidate_response.status_code == 201
+
+    candidate_id = candidate_response.json()["id"]
+
+    match_response = client.post(
+        f"/api/v1/candidates/{candidate_id}/match-job",
+        json={
+            "job_description_document_id": jd_response.json()["id"],
+            "role_name": "QA Intern",
+        },
+    )
+
+    assert match_response.status_code == 201
+
+    timeline_response = client.get(f"/api/v1/candidates/{candidate_id}/timeline")
+
+    assert timeline_response.status_code == 200
+
+    data = timeline_response.json()
+
+    assert data["summary"]["job_match_count"] == 1
+    assert data["summary"]["latest_job_match_score"] == 86
+    assert data["summary"]["latest_job_match_recommendation"] == "strong_match"
+
+    assert len(data["job_matches"]) == 1
+    assert data["job_matches"][0]["candidate_id"] == candidate_id
+    assert data["job_matches"][0]["match_score"] == 86
