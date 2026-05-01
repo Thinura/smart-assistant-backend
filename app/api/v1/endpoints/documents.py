@@ -10,9 +10,11 @@ from app.models.document import Document, DocumentStatus, DocumentType
 from app.models.document_chunk import DocumentChunk
 from app.schemas.document import DocumentDetailResponse, DocumentListResponse
 from app.schemas.document_chunk import DocumentChunkResponse
+from app.schemas.document_qa import DocumentAskRequest, DocumentAskResponse
 from app.schemas.document_search import DocumentSearchRequest, DocumentSearchResponse
 from app.services.audit_log_service import AuditLogService
 from app.services.document_chunking_service import DocumentChunkingService
+from app.services.document_qa_service import DocumentQAService
 from app.services.document_search_service import DocumentSearchService
 from app.services.document_text_extraction_service import DocumentTextExtractionService
 from app.services.embedding_service import EmbeddingService
@@ -151,6 +153,18 @@ def search_documents(
         query=payload.query,
         result_count=len(results),
         results=results,
+    )
+
+
+@router.post("/ask", response_model=DocumentAskResponse)
+def ask_document_question(
+    payload: DocumentAskRequest,
+    db: DbSession,
+) -> DocumentAskResponse:
+    return DocumentQAService(db).ask(
+        question=payload.question,
+        document_type=payload.document_type,
+        limit=payload.limit,
     )
 
 
