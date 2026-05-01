@@ -10,6 +10,7 @@ from app.models.candidate import Candidate, CandidateStatus
 from app.models.candidate_job_match import CandidateJobMatch
 from app.models.candidate_review import CandidateReview
 from app.models.document import Document, DocumentType
+from app.models.interview_kit import InterviewKit
 from app.models.outbox_message import OutboxMessage, OutboxMessageStatus
 from app.schemas.candidate import (
     CandidateCreate,
@@ -24,8 +25,13 @@ from app.schemas.candidate_job_match import (
     CandidateJobMatchResponse,
 )
 from app.schemas.candidate_review import CandidateReviewResponse
+from app.schemas.interview_kit import (
+    InterviewKitGenerateRequest,
+    InterviewKitResponse,
+)
 from app.services.audit_log_service import AuditLogService
 from app.services.candidate_job_match_service import CandidateJobMatchService
+from app.services.interview_kit_service import InterviewKitService
 
 router = APIRouter()
 
@@ -104,6 +110,60 @@ def list_candidates(
         )
 
     return query.order_by(Candidate.created_at.desc()).limit(limit).all()
+
+
+@router.post(
+    "/{candidate_id}/interview-kit",
+    response_model=InterviewKitResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def generate_candidate_interview_kit(
+    candidate_id: UUID,
+    payload: InterviewKitGenerateRequest,
+    db: DbSession,
+) -> InterviewKit:
+    candidate = db.get(Candidate, candidate_id)
+
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+
+    try:
+        return InterviewKitService(db).generate_for_candidate(
+            candidate=candidate,
+            payload=payload,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/{candidate_id}/interview-kits",
+    response_model=list[InterviewKitResponse],
+)
+def list_candidate_interview_kits(
+    candidate_id: UUID,
+    db: DbSession,
+) -> list[InterviewKit]:
+    candidate = db.get(Candidate, candidate_id)
+
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+
+    return (
+        db.query(InterviewKit)
+        .filter(InterviewKit.candidate_id == candidate_id)
+        .order_by(InterviewKit.created_at.desc())
+        .all()
+    )
 
 
 @router.post(
@@ -282,6 +342,15 @@ def get_candidate_timeline(
 
     latest_job_match = job_matches[0] if job_matches else None
 
+    interview_kits = (
+        db.query(InterviewKit)
+        .filter(InterviewKit.candidate_id == candidate.id)
+        .order_by(InterviewKit.created_at.desc())
+        .all()
+    )
+
+    latest_interview_kit = interview_kits[0] if interview_kits else None
+
     summary = CandidateTimelineSummary(
         candidate_id=candidate.id,
         has_cv=candidate.cv_document_id is not None,
@@ -307,6 +376,8 @@ def get_candidate_timeline(
         latest_job_match_recommendation=(
             latest_job_match.recommendation if latest_job_match else None
         ),
+        interview_kit_count=len(interview_kits),
+        latest_interview_kit_id=latest_interview_kit.id if latest_interview_kit else None,
     )
 
     return CandidateTimelineResponse(
@@ -319,6 +390,7 @@ def get_candidate_timeline(
         outbox_messages=outbox_messages,
         candidate_reviews=candidate_reviews,
         job_matches=job_matches,
+        interview_kits=interview_kits,
     )
 
 

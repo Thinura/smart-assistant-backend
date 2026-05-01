@@ -13,7 +13,28 @@ from app.models.candidate_review import (
     CandidateReviewConfidence,
     CandidateReviewRecommendation,
 )
+from app.models.interview_kit import InterviewKitStatus
 from app.models.outbox_message import OutboxMessageStatus
+
+
+class CandidateTimelineInterviewKitResponse(BaseModel):
+    id: UUID
+    candidate_id: UUID
+    cv_document_id: UUID | None
+    job_description_document_id: UUID | None
+    candidate_review_id: UUID | None
+    candidate_job_match_id: UUID | None
+    role_name: str | None
+    status: InterviewKitStatus
+    summary: str
+    technical_questions: list[dict[str, Any]]
+    behavioral_questions: list[dict[str, Any]]
+    risk_based_questions: list[dict[str, Any]]
+    evaluation_rubric: list[dict[str, Any]]
+    source_metadata: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CandidateCreate(BaseModel):
@@ -123,6 +144,8 @@ class CandidateTimelineSummary(BaseModel):
     job_match_count: int
     latest_job_match_score: int | None
     latest_job_match_recommendation: CandidateJobMatchRecommendation | None
+    interview_kit_count: int
+    latest_interview_kit_id: UUID | None
 
 
 class CandidateTimelineOutboxMessageResponse(BaseModel):
@@ -190,3 +213,4 @@ class CandidateTimelineResponse(BaseModel):
     outbox_messages: list[CandidateTimelineOutboxMessageResponse]
     candidate_reviews: list[CandidateTimelineReviewResponse]
     job_matches: list[CandidateTimelineJobMatchResponse]
+    interview_kits: list[CandidateTimelineInterviewKitResponse]

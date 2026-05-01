@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from app.services import candidate_job_match_service
+from app.services import candidate_job_match_service, interview_kit_service
 from app.tools.candidate_tools import ReviewCandidateTool
 
 
@@ -485,3 +485,102 @@ def test_candidate_timeline_includes_job_matches(
     assert len(data["job_matches"]) == 1
     assert data["job_matches"][0]["candidate_id"] == candidate_id
     assert data["job_matches"][0]["match_score"] == 86
+
+
+def test_candidate_timeline_includes_interview_kits(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    class FakeResponse:
+        content = """
+        {
+          "summary": "Interview should focus on QA fundamentals.",
+          "technical_questions": [
+            {
+              "question": "How do you write a good test case?",
+              "purpose": "Assess test design basics.",
+              "expected_signals": ["clear steps"]
+            }
+          ],
+          "behavioral_questions": [
+            {
+              "question": "Tell me about a time you found an important bug.",
+              "purpose": "Assess ownership.",
+              "expected_signals": ["clear communication"]
+            }
+          ],
+          "risk_based_questions": [
+            {
+              "question": "How comfortable are you with automation testing?",
+              "purpose": "Validate automation gap.",
+              "expected_signals": ["learning mindset"]
+            }
+          ],
+          "evaluation_rubric": [
+            {
+              "area": "QA fundamentals",
+              "strong_signal": "Explains test cases clearly.",
+              "weak_signal": "Gives vague definitions."
+            }
+          ]
+        }
+        """
+
+    class FakeModel:
+        def invoke(self, messages):
+            return FakeResponse()
+
+    monkeypatch.setattr(
+        interview_kit_service,
+        "get_chat_model",
+        lambda: FakeModel(),
+    )
+
+    cv_response = client.post(
+        "/api/v1/documents/upload",
+        files={
+            "file": (
+                "timeline-interview-kit-cv.txt",
+                b"Candidate has manual testing and bug reporting experience.",
+                "text/plain",
+            )
+        },
+        data={"document_type": "cv"},
+    )
+
+    assert cv_response.status_code == 201
+
+    candidate_response = client.post(
+        "/api/v1/candidates",
+        json={
+            "full_name": "Timeline Interview Kit Candidate",
+            "email": "timeline.interview.kit@example.com",
+            "role_applied_for": "QA Intern",
+            "cv_document_id": cv_response.json()["id"],
+        },
+    )
+
+    assert candidate_response.status_code == 201
+
+    candidate_id = candidate_response.json()["id"]
+
+    kit_response = client.post(
+        f"/api/v1/candidates/{candidate_id}/interview-kit",
+        json={"role_name": "QA Intern"},
+    )
+
+    assert kit_response.status_code == 201
+
+    kit_id = kit_response.json()["id"]
+
+    timeline_response = client.get(f"/api/v1/candidates/{candidate_id}/timeline")
+
+    assert timeline_response.status_code == 200
+
+    data = timeline_response.json()
+
+    assert data["summary"]["interview_kit_count"] == 1
+    assert data["summary"]["latest_interview_kit_id"] == kit_id
+    assert len(data["interview_kits"]) == 1
+    assert data["interview_kits"][0]["id"] == kit_id
+    assert data["interview_kits"][0]["candidate_id"] == candidate_id
