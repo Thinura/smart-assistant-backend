@@ -10,6 +10,7 @@ from app.schemas.outbox_message import (
     OutboxBulkSendResponse,
     OutboxMarkSentRequest,
     OutboxMessageResponse,
+    OutboxSummaryResponse,
 )
 from app.services.outbox_send_service import OutboxSendService
 from app.services.outbox_service import OutboxService
@@ -50,6 +51,13 @@ def send_pending_outbox_messages(
         limit=payload.limit,
         include_failed=payload.include_failed,
     )
+
+
+@router.get("/summary", response_model=OutboxSummaryResponse)
+def get_outbox_summary(
+    db: DbSession,
+) -> dict:
+    return OutboxSendService(db).get_summary()
 
 
 @router.post("/{outbox_message_id}/send", response_model=OutboxMessageResponse)

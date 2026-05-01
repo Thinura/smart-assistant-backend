@@ -22,6 +22,13 @@ class OutboxMessageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class OutboxSummaryResponse(BaseModel):
+    pending_count: int
+    sent_count: int
+    failed_count: int
+    total_count: int
+
+
 class OutboxMarkSentRequest(BaseModel):
     provider_message_id: str | None = Field(default=None, max_length=255)
 

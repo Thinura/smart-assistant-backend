@@ -35,3 +35,9 @@ reset-test-db:
 
 reset-test-db-migrate: reset-test-db
 	$(MAKE) migrate-test
+
+send-outbox:
+	curl -X POST http://localhost:8000/api/v1/outbox/send-pending \
+		-H "Content-Type: application/json" \
+		-d '{"limit": 50, "include_failed": true}'
+		

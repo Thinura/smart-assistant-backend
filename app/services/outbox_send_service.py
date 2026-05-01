@@ -136,3 +136,29 @@ class OutboxSendService:
             "failed_count": failed_count,
             "results": results,
         }
+
+    def get_summary(self) -> dict:
+        pending_count = (
+            self.db.query(OutboxMessage)
+            .filter(OutboxMessage.status == OutboxMessageStatus.PENDING)
+            .count()
+        )
+
+        sent_count = (
+            self.db.query(OutboxMessage)
+            .filter(OutboxMessage.status == OutboxMessageStatus.SENT)
+            .count()
+        )
+
+        failed_count = (
+            self.db.query(OutboxMessage)
+            .filter(OutboxMessage.status == OutboxMessageStatus.FAILED)
+            .count()
+        )
+
+        return {
+            "pending_count": pending_count,
+            "sent_count": sent_count,
+            "failed_count": failed_count,
+            "total_count": pending_count + sent_count + failed_count,
+        }

@@ -232,3 +232,47 @@ def test_bulk_send_pending_outbox_messages(client: TestClient) -> None:
 
         assert detail_response.status_code == 200
         assert detail_response.json()["status"] == "sent"
+
+
+def test_outbox_summary_returns_counts(client: TestClient) -> None:
+    approval_response = client.post(
+        "/api/v1/approvals",
+        json={
+            "action_type": "email_draft",
+            "title": "Outbox summary test",
+            "action_payload": {
+                "candidate_email": "summary.test@example.com",
+                "subject": "Summary test",
+                "draft_body": "This is a summary test.",
+            },
+        },
+    )
+
+    assert approval_response.status_code == 201
+
+    approval_id = approval_response.json()["id"]
+
+    approve_response = client.post(
+        f"/api/v1/approvals/{approval_id}/approve",
+        json={
+            "reviewed_by": "Thinura",
+            "review_comment": "Approved.",
+        },
+    )
+
+    assert approve_response.status_code == 200
+
+    execute_response = client.post(f"/api/v1/approvals/{approval_id}/execute")
+
+    assert execute_response.status_code == 200
+
+    summary_response = client.get("/api/v1/outbox/summary")
+
+    assert summary_response.status_code == 200
+
+    data = summary_response.json()
+
+    assert data["pending_count"] >= 1
+    assert data["total_count"] >= 1
+    assert data["sent_count"] >= 0
+    assert data["failed_count"] >= 0
