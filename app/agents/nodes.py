@@ -1,3 +1,4 @@
+import re
 from uuid import UUID
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -247,13 +248,21 @@ def handle_email_draft(state: AgentState) -> AgentState:
             }
 
         email_type = detect_email_type(state["user_message"])
-
+        template_variables = extract_email_template_variables(state["user_message"])
         draft_result, draft_tool_call = tool_execution_service.run_tool(
             tool_name="draft_candidate_email",
             payload={
                 "candidate_id": str(candidate_id),
                 "email_type": email_type,
                 "tone": "professional and kind",
+                "company_name": template_variables.get("company_name") or "Expernetic",
+                "recruiter_name": template_variables.get("recruiter_name") or "Thinura",
+                "interview_date": template_variables.get("interview_date") or "",
+                "interview_time": template_variables.get("interview_time") or "",
+                "interview_link": template_variables.get("interview_link") or "",
+                "assignment_deadline": template_variables.get("assignment_deadline") or "",
+                "location": template_variables.get("location") or "",
+                "next_steps": template_variables.get("next_steps") or "",
             },
             agent_run_id=state.get("agent_run_id"),
         )
@@ -382,6 +391,38 @@ def extract_uuid_from_text(text: str) -> UUID | None:
             continue
 
     return None
+
+
+def extract_email_template_variables(message: str) -> dict[str, str]:
+    variables: dict[str, str] = {}
+
+    date_match = re.search(
+        r"(?i)(?:on|date)\s+([0-9]{1,2}\s+[A-Za-z]+\s+[0-9]{4})",
+        message,
+    )
+    if date_match:
+        variables["interview_date"] = date_match.group(1)
+
+    time_match = re.search(
+        r"(?i)(?:at|time)\s+([0-9]{1,2}(?::[0-9]{2})?\s*(?:AM|PM|am|pm))",
+        message,
+    )
+    if time_match:
+        variables["interview_time"] = time_match.group(1)
+
+    link_match = re.search(r"https?://\S+", message)
+    if link_match:
+        variables["interview_link"] = link_match.group(0)
+
+    company_match = re.search(r"(?i)(?:at company|company)\s+([A-Za-z0-9 &.-]+)", message)
+    if company_match:
+        variables["company_name"] = company_match.group(1).strip()
+
+    recruiter_match = re.search(r"(?i)(?:from|recruiter)\s+([A-Za-z ]+)", message)
+    if recruiter_match:
+        variables["recruiter_name"] = recruiter_match.group(1).strip()
+
+    return variables
 
 
 def detect_email_type(message: str) -> str:

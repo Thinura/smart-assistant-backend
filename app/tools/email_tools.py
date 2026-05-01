@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from app.models.candidate import Candidate
 from app.models.document import Document
 from app.models.document_chunk import DocumentChunk
+from app.models.email_template import EmailTemplateType
 from app.services.chat_model_service import get_chat_model
+from app.services.email_template_service import EmailTemplateService
 from app.tools.base import BaseTool, ToolResult
 
 
@@ -36,6 +38,51 @@ class DraftCandidateEmailTool(BaseTool):
             return ToolResult(
                 success=False,
                 error="Candidate not found",
+            )
+
+        template_type = self._map_email_type_to_template_type(email_type)
+
+        template_service = EmailTemplateService(self.db)
+        template = template_service.get_active_template_by_type(template_type)
+
+        if template is not None:
+            variables = self._build_template_variables(
+                candidate=candidate,
+                payload=payload,
+            )
+
+            rendered = template_service.render_template(
+                template=template,
+                variables=variables,
+            )
+
+            if rendered.missing_variables:
+                return ToolResult(
+                    success=False,
+                    error=(
+                        "Missing required template variables: "
+                        + ", ".join(rendered.missing_variables)
+                    ),
+                )
+
+            return ToolResult(
+                success=True,
+                data={
+                    "candidate": {
+                        "id": str(candidate.id),
+                        "full_name": candidate.full_name,
+                        "email": candidate.email,
+                        "role_applied_for": candidate.role_applied_for,
+                    },
+                    "email": {
+                        "type": email_type,
+                        "subject": rendered.subject,
+                        "body": rendered.body,
+                        "template_id": str(template.id),
+                        "template_name": template.name,
+                        "variables": rendered.used_variables,
+                    },
+                },
             )
 
         cv_context = self._get_cv_context(candidate)
@@ -97,6 +144,46 @@ class DraftCandidateEmailTool(BaseTool):
                 },
             },
         )
+
+    def _map_email_type_to_template_type(self, email_type: str) -> EmailTemplateType:
+        normalized = email_type.lower().strip()
+
+        mapping = {
+            "shortlist": EmailTemplateType.SHORTLIST,
+            "rejection": EmailTemplateType.REJECTION,
+            "reject": EmailTemplateType.REJECTION,
+            "interview": EmailTemplateType.INTERVIEW_INVITE,
+            "interview_invite": EmailTemplateType.INTERVIEW_INVITE,
+            "assignment": EmailTemplateType.ASSIGNMENT_REQUEST,
+            "assignment_request": EmailTemplateType.ASSIGNMENT_REQUEST,
+            "assignment_reminder": EmailTemplateType.ASSIGNMENT_REMINDER,
+            "follow_up": EmailTemplateType.FOLLOW_UP,
+            "follow": EmailTemplateType.FOLLOW_UP,
+            "offer": EmailTemplateType.OFFER,
+        }
+
+        return mapping.get(normalized, EmailTemplateType.GENERAL)
+
+    def _build_template_variables(
+        self,
+        *,
+        candidate,
+        payload: dict[str, Any],
+    ) -> dict[str, str]:
+        return {
+            "candidate_name": candidate.full_name,
+            "candidate_email": candidate.email or "",
+            "role_name": candidate.role_applied_for or str(payload.get("role_name") or ""),
+            "company_name": str(payload.get("company_name") or ""),
+            "interview_date": str(payload.get("interview_date") or ""),
+            "interview_time": str(payload.get("interview_time") or ""),
+            "interview_link": str(payload.get("interview_link") or ""),
+            "recruiter_name": str(payload.get("recruiter_name") or ""),
+            "assignment_deadline": str(payload.get("assignment_deadline") or ""),
+            "location": str(payload.get("location") or ""),
+            "salary_range": str(payload.get("salary_range") or ""),
+            "next_steps": str(payload.get("next_steps") or ""),
+        }
 
     def _get_cv_context(self, candidate: Candidate) -> str:
         if candidate.cv_document_id is None:
