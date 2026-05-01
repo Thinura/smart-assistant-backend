@@ -1,0 +1,1 @@
+QA Intern role requires manual testing, bug reporting, test cases, and basic automation knowledge.

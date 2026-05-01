@@ -3,6 +3,7 @@ from app.models.agent_run import AgentRun
 from app.models.approval_request import ApprovalRequest
 from app.models.audit_log import AuditLog
 from app.models.candidate import Candidate
+from app.models.candidate_job_match import CandidateJobMatch
 from app.models.candidate_review import CandidateReview
 from app.models.conversation import Conversation
 from app.models.document import Document
@@ -24,4 +25,5 @@ __all__ = [
     "ToolCall",
     "OutboxMessage",
     "CandidateReview",
+    "CandidateJobMatch",
 ]

@@ -7,6 +7,7 @@ from app.models.agent_run import AgentRun
 from app.models.approval_request import ApprovalRequest, ApprovalStatus
 from app.models.audit_log import AuditEventType, AuditLog
 from app.models.candidate import Candidate, CandidateStatus
+from app.models.candidate_job_match import CandidateJobMatch
 from app.models.candidate_review import CandidateReview
 from app.models.document import Document, DocumentType
 from app.models.outbox_message import OutboxMessage, OutboxMessageStatus
@@ -18,8 +19,13 @@ from app.schemas.candidate import (
     CandidateTimelineSummary,
     CandidateUpdate,
 )
+from app.schemas.candidate_job_match import (
+    CandidateJobMatchRequest,
+    CandidateJobMatchResponse,
+)
 from app.schemas.candidate_review import CandidateReviewResponse
 from app.services.audit_log_service import AuditLogService
+from app.services.candidate_job_match_service import CandidateJobMatchService
 
 router = APIRouter()
 
@@ -98,6 +104,60 @@ def list_candidates(
         )
 
     return query.order_by(Candidate.created_at.desc()).limit(limit).all()
+
+
+@router.post(
+    "/{candidate_id}/match-job",
+    response_model=CandidateJobMatchResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def match_candidate_to_job(
+    candidate_id: UUID,
+    payload: CandidateJobMatchRequest,
+    db: DbSession,
+) -> CandidateJobMatch:
+    candidate = db.get(Candidate, candidate_id)
+
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+
+    try:
+        return CandidateJobMatchService(db).match_candidate_to_job(
+            candidate=candidate,
+            payload=payload,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/{candidate_id}/job-matches",
+    response_model=list[CandidateJobMatchResponse],
+)
+def list_candidate_job_matches(
+    candidate_id: UUID,
+    db: DbSession,
+) -> list[CandidateJobMatch]:
+    candidate = db.get(Candidate, candidate_id)
+
+    if candidate is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Candidate not found",
+        )
+
+    return (
+        db.query(CandidateJobMatch)
+        .filter(CandidateJobMatch.candidate_id == candidate_id)
+        .order_by(CandidateJobMatch.created_at.desc())
+        .all()
+    )
 
 
 @router.get("/{candidate_id}", response_model=CandidateResponse)
