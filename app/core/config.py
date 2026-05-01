@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     default_llm_model: str = "llama3.2:1b"
     default_embedding_model: str = "nomic-embed-text"
 
+    email_provider: str = "console"
+
+    email_from_name: str = "Smart Assistant"
+    email_from_address: str = "no-reply@example.com"
+
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_use_tls: bool = True
+    smtp_timeout_seconds: int = 30
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,
         env_file_encoding="utf-8",
