@@ -13,6 +13,7 @@ from app.schemas.approval_request import (
     ApprovalReviewRequest,
 )
 from app.services.approval_execution_service import ApprovalExecutionService
+from app.services.approval_request_service import ApprovalRequestService
 from app.services.audit_log_service import AuditLogService
 from app.services.outbox_service import OutboxService
 
@@ -81,35 +82,19 @@ def update_approval_request(
     if approval_request is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=APPROVAL_REQUEST_NOT_FOUND,
+            detail="Approval request not found",
         )
 
-    if approval_request.status != ApprovalStatus.PENDING:
+    try:
+        return ApprovalRequestService(db).update_request(
+            approval_request=approval_request,
+            payload=payload,
+        )
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only pending approval requests can be updated",
-        )
-
-    update_data = payload.model_dump(exclude_unset=True)
-
-    for field, value in update_data.items():
-        setattr(approval_request, field, value)
-
-    AuditLogService(db).record(
-        event_type=AuditEventType.APPROVAL_UPDATED,
-        entity_type="approval_request",
-        entity_id=str(approval_request.id),
-        actor="system",
-        metadata={
-            "updated_fields": list(update_data.keys()),
-            "action_type": approval_request.action_type.value,
-        },
-    )
-
-    db.commit()
-    db.refresh(approval_request)
-
-    return approval_request
+            detail=str(exc),
+        ) from exc
 
 
 @router.get("/{approval_request_id}", response_model=ApprovalRequestResponse)

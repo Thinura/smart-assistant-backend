@@ -39,6 +39,6 @@ class ApprovalRequestResponse(BaseModel):
 
 
 class ApprovalRequestUpdate(BaseModel):
-    title: str | None = Field(default=None, max_length=255)
+    title: str | None = Field(default=None, min_length=1, max_length=255)
     description: str | None = None
     action_payload: dict[str, Any] | None = None
