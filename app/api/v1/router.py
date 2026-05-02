@@ -4,6 +4,7 @@ from app.api.v1.endpoints.agent_runs import router as agent_runs_router
 from app.api.v1.endpoints.approvals import router as approvals_router
 from app.api.v1.endpoints.audit_logs import router as audit_logs_router
 from app.api.v1.endpoints.candidate_reviews import router as candidate_reviews_router
+from app.api.v1.endpoints.candidate_workflows import router as candidate_workflows_router
 from app.api.v1.endpoints.candidates import router as candidates_router
 from app.api.v1.endpoints.chat import router as chat_router
 from app.api.v1.endpoints.conversations import router as conversations_router
@@ -99,4 +100,9 @@ api_router.include_router(
     email_templates_router,
     prefix="/email-templates",
     tags=["email-templates"],
+)
+
+api_router.include_router(
+    candidate_workflows_router,
+    tags=["candidate-workflows"],
 )

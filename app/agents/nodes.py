@@ -10,6 +10,9 @@ from app.agents.intents import (
 )
 from app.agents.state import AgentState
 from app.models.approval_request import ApprovalActionType
+from app.models.candidate_workflow import CandidateWorkflowStatus, CandidateWorkflowType
+from app.schemas.candidate_workflow import CandidateWorkflowCreate
+from app.services.candidate_workflow_service import CandidateWorkflowService
 from app.services.chat_model_service import get_chat_model
 from app.services.tool_execution_service import ToolExecutionService
 
@@ -687,8 +690,54 @@ def handle_interview_workflow(state: AgentState) -> AgentState:
         review = review_result.data["review"]
         approval_request_id = approval_result.data["approval_request_id"]
 
+        candidate_review_id = review_result.data.get("candidate_review_id")
+
+        candidate_job_match_id = None
+        if (
+            job_description_document_id is not None
+            and "match_result" in locals()
+            and match_result.success
+            and match_result.data
+        ):
+            candidate_job_match_id = match_result.data.get("id")
+
+        interview_kit_id = None
+        if (
+            job_description_document_id is not None
+            and "interview_kit_result" in locals()
+            and interview_kit_result.success
+            and interview_kit_result.data
+        ):
+            interview_kit_id = interview_kit_result.data.get("id")
+
+        workflow = CandidateWorkflowService(db).create_workflow(
+            CandidateWorkflowCreate(
+                candidate_id=candidate_id,
+                agent_run_id=state.get("agent_run_id"),
+                workflow_type=CandidateWorkflowType.INTERVIEW_PREPARATION,
+                status=CandidateWorkflowStatus.COMPLETED,
+                role_name=extract_role_name(state["user_message"])
+                or candidate.get("role_applied_for"),
+                candidate_review_id=candidate_review_id,
+                candidate_job_match_id=candidate_job_match_id,
+                interview_kit_id=interview_kit_id,
+                approval_request_id=approval_request_id,
+                score=review.get("score"),
+                recommendation=review.get("recommendation"),
+                summary="Interview workflow prepared successfully.",
+                workflow_metadata={
+                    "tool_results_count": len(workflow_tool_results),
+                    "job_description_document_id": (
+                        str(job_description_document_id) if job_description_document_id else None
+                    ),
+                    "email_subject": email["subject"],
+                },
+            )
+        )
+
         assistant_message = (
             "Interview workflow prepared successfully.\n\n"
+            f"Workflow ID: {workflow.id}\n"
             f"Candidate: {candidate['full_name']}\n"
             f"Review Score: {review['score']}/100\n"
             f"Recommendation: {review['recommendation']}\n"
@@ -705,6 +754,7 @@ def handle_interview_workflow(state: AgentState) -> AgentState:
             "sources": [
                 {
                     "candidate_id": candidate["id"],
+                    "workflow_id": str(workflow.id),
                     "source": "multi_step_interview_workflow",
                 }
             ],
