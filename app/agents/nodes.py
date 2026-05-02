@@ -62,9 +62,14 @@ def generate_general_response(state: AgentState) -> AgentState:
 
 
 def handle_document_qa(state: AgentState) -> AgentState:
-    from app.db.session import SessionLocal
+    db = state.get("db")
+    if db is None:
+        from app.db.session import SessionLocal
 
-    db = SessionLocal()
+        db = SessionLocal()
+        should_close_db = True
+    else:
+        should_close_db = False
 
     try:
         tool_execution_service = ToolExecutionService(db)
@@ -148,13 +153,19 @@ def handle_document_qa(state: AgentState) -> AgentState:
         }
 
     finally:
-        db.close()
+        if should_close_db:
+            db.close()
 
 
 def handle_candidate_review(state: AgentState) -> AgentState:
-    from app.db.session import SessionLocal
+    db = state.get("db")
+    if db is None:
+        from app.db.session import SessionLocal
 
-    db = SessionLocal()
+        db = SessionLocal()
+        should_close_db = True
+    else:
+        should_close_db = False
 
     try:
         tool_execution_service = ToolExecutionService(db)
@@ -229,13 +240,19 @@ def handle_candidate_review(state: AgentState) -> AgentState:
         }
 
     finally:
-        db.close()
+        if should_close_db:
+            db.close()
 
 
 def handle_email_draft(state: AgentState) -> AgentState:
-    from app.db.session import SessionLocal
+    db = state.get("db")
+    if db is None:
+        from app.db.session import SessionLocal
 
-    db = SessionLocal()
+        db = SessionLocal()
+        should_close_db = True
+    else:
+        should_close_db = False
 
     try:
         tool_execution_service = ToolExecutionService(db)
@@ -352,7 +369,8 @@ def handle_email_draft(state: AgentState) -> AgentState:
         }
 
     finally:
-        db.close()
+        if should_close_db:
+            db.close()
 
 
 def handle_unknown_intent(state: AgentState) -> AgentState:

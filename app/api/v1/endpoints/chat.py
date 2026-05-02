@@ -31,10 +31,11 @@ def create_chat_message(
         status=AgentRunStatus.RUNNING,
         input_message=payload.message,
         run_metadata={
-            "provider": "ollama",
-            "model": "langchain_ollama",
-            "mode": "langgraph_chat",
+            "mode": "multi_agent_langgraph",
             "graph": "chat_graph",
+            "supervisor": "supervisor_agent",
+            "provider": "ollama",
+            "tool_results_count": 0,
         },
     )
 
@@ -48,6 +49,7 @@ def create_chat_message(
                 "conversation_id": payload.conversation_id,
                 "agent_run_id": agent_run.id,
                 "user_message": payload.message,
+                "db": db,
                 "intent": AgentIntent.UNKNOWN,
                 "assistant_message": None,
                 "tool_results": [],
@@ -56,7 +58,7 @@ def create_chat_message(
             }
         )
 
-        assistant_text = result["assistant_message"]
+        assistant_text = result.get("assistant_message")
 
         if assistant_text is None:
             raise RuntimeError("Agent did not generate a response")
@@ -81,7 +83,8 @@ def create_chat_message(
         agent_run.completed_at = datetime.now(UTC)
         agent_run.run_metadata = {
             **(agent_run.run_metadata or {}),
-            "intent": str(result["intent"]),
+            "selected_agent": result.get("selected_agent"),
+            "intent": str(result.get("intent")),
             "sources": sources,
             "tool_results_count": len(tool_results),
         }

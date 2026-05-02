@@ -1,90 +1,41 @@
 from langgraph.graph import END, StateGraph
 
-from app.agents.intents import AgentIntent
-from app.agents.nodes import classify_intent
-from app.agents.registry import INTENT_NODE_REGISTRY
+from app.agents.specialist.candidate_agent import candidate_agent
+from app.agents.specialist.document_agent import document_agent
+from app.agents.specialist.email_agent import email_agent
+from app.agents.specialist.general_agent import general_agent
 from app.agents.state import AgentState
+from app.agents.supervisor import supervisor_agent
 
 
-def route_by_intent(state: AgentState) -> str:
-    return state["intent"].value
+def route_to_specialist(state: AgentState) -> str:
+    return state.get("selected_agent", "general_agent")
 
 
-def detect_intent_by_rules(message: str) -> AgentIntent | None:
-    normalized_message = message.strip().lower()
+workflow = StateGraph(AgentState)
 
-    document_keywords = [
-        "uploaded document",
-        "uploaded file",
-        "from the document",
-        "from uploaded document",
-        "according to the document",
-        "according to uploaded document",
-        "based on the document",
-        "based on uploaded document",
-        "policy document",
-        "document says",
-        "file says",
-        "pdf",
-        "docx",
-    ]
+workflow.add_node("supervisor", supervisor_agent)
+workflow.add_node("candidate_agent", candidate_agent)
+workflow.add_node("document_agent", document_agent)
+workflow.add_node("email_agent", email_agent)
+workflow.add_node("general_agent", general_agent)
 
-    candidate_keywords = [
-        "review this cv",
-        "review cv",
-        "candidate review",
-        "review this candidate",
-        "match this candidate",
-        "match candidate",
-        "jd match",
-        "job description match",
-        "resume review",
-        "assignment review",
-    ]
+workflow.set_entry_point("supervisor")
 
-    email_keywords = [
-        "draft email",
-        "write email",
-        "email draft",
-        "rejection email",
-        "shortlist email",
-        "interview invite",
-        "follow-up email",
-        "candidate email",
-    ]
+workflow.add_conditional_edges(
+    "supervisor",
+    route_to_specialist,
+    {
+        "candidate_agent": "candidate_agent",
+        "document_agent": "document_agent",
+        "email_agent": "email_agent",
+        "general_agent": "general_agent",
+    },
+)
 
-    if any(keyword in normalized_message for keyword in document_keywords):
-        return AgentIntent.DOCUMENT_QA
+workflow.add_edge("candidate_agent", END)
+workflow.add_edge("document_agent", END)
+workflow.add_edge("email_agent", END)
+workflow.add_edge("general_agent", END)
 
-    if any(keyword in normalized_message for keyword in candidate_keywords):
-        return AgentIntent.CANDIDATE_REVIEW
-
-    if any(keyword in normalized_message for keyword in email_keywords):
-        return AgentIntent.EMAIL_DRAFT
-
-    return None
-
-
-def build_chat_graph():
-    graph = StateGraph(AgentState)
-
-    graph.add_node("classify_intent", classify_intent)
-
-    for intent, node in INTENT_NODE_REGISTRY.items():
-        graph.add_node(intent.value, node)
-
-    graph.set_entry_point("classify_intent")
-
-    graph.add_conditional_edges(
-        "classify_intent",
-        route_by_intent,
-        {intent.value: intent.value for intent in INTENT_NODE_REGISTRY},
-    )
-
-    for intent in INTENT_NODE_REGISTRY:
-        graph.add_edge(intent.value, END)
-
-    return graph.compile()
-
-
-chat_graph = build_chat_graph()
+chat_graph = workflow.compile()

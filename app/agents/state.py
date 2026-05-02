@@ -1,15 +1,24 @@
 from typing import Any, TypedDict
 from uuid import UUID
 
-from app.agents.intents import AgentIntent
+from sqlalchemy.orm import Session
 
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     conversation_id: UUID
-    agent_run_id: UUID | None
+    agent_run_id: UUID
     user_message: str
-    intent: AgentIntent
-    assistant_message: str | None
-    tool_results: list[dict[str, Any]]
+    db: Session
+
+    intent: str
+    selected_agent: str
+
+    assistant_message: str
     sources: list[dict[str, Any]]
-    error: str | None
+    tool_results: list[dict[str, Any]]
+
+    candidate_id: str | None
+    document_type: str | None
+    email_type: str | None
+
+    extracted_variables: dict[str, Any]
