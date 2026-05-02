@@ -106,6 +106,7 @@ def test_multi_step_interview_workflow_creates_approval(
 
     assert "Interview workflow prepared successfully" in data["assistant_message"]
     assert "Approval Request ID:" in data["assistant_message"]
+    assert "Workflow ID:" in data["assistant_message"]
 
     agent_run_id = data["agent_run_id"]
 
@@ -116,6 +117,19 @@ def test_multi_step_interview_workflow_creates_approval(
 
     assert len(matching_runs) == 1
     assert matching_runs[0]["run_metadata"]["selected_agent"] == "workflow_agent"
+
+    workflow_response = client.get(f"/api/v1/candidates/{candidate_id}/workflows")
+    assert workflow_response.status_code == 200
+
+    workflows = workflow_response.json()
+
+    assert len(workflows) == 1
+    assert workflows[0]["candidate_id"] == candidate_id
+    assert workflows[0]["workflow_type"] == "interview_preparation"
+    assert workflows[0]["status"] == "completed"
+    assert workflows[0]["candidate_job_match_id"] is None
+    assert workflows[0]["interview_kit_id"] is None
+    assert workflows[0]["approval_request_id"] is not None
 
 
 def test_multi_step_interview_workflow_with_job_description(
@@ -236,6 +250,7 @@ def test_multi_step_interview_workflow_with_job_description(
     data = chat_response.json()
 
     assert "Interview workflow prepared successfully" in data["assistant_message"]
+    assert "Workflow ID:" in data["assistant_message"]
     assert "Review Score: 88/100" in data["assistant_message"]
     assert "Job match score:" in data["assistant_message"]
     assert "Interview kit created:" in data["assistant_message"]
@@ -254,3 +269,18 @@ def test_multi_step_interview_workflow_with_job_description(
 
     assert run_metadata["selected_agent"] == "workflow_agent"
     assert run_metadata["tool_results_count"] == 5
+
+    workflow_response = client.get(f"/api/v1/candidates/{candidate_id}/workflows")
+    assert workflow_response.status_code == 200
+
+    workflows = workflow_response.json()
+
+    assert len(workflows) == 1
+    assert workflows[0]["candidate_id"] == candidate_id
+    assert workflows[0]["workflow_type"] == "interview_preparation"
+    assert workflows[0]["status"] == "completed"
+    assert workflows[0]["score"] == 88
+    assert workflows[0]["recommendation"] == "shortlist"
+    assert workflows[0]["candidate_job_match_id"] is not None
+    assert workflows[0]["interview_kit_id"] is not None
+    assert workflows[0]["approval_request_id"] is not None

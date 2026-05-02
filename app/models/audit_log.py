@@ -31,6 +31,7 @@ class AuditEventType(StrEnum):
     EMAIL_TEMPLATE_RENDERED = "email_template.rendered"
     OUTBOX_SEND_FAILED = "outbox.send_failed"
     APPROVAL_REQUEST_UPDATED = "approval_request.updated"
+    CANDIDATE_WORKFLOW_CREATED = "candidate_workflow.created"
 
 
 class AuditLog(Base):
