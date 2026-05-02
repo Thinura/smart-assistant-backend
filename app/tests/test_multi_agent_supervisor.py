@@ -39,3 +39,13 @@ def test_supervisor_routes_unknown_message_to_general_agent() -> None:
     result = supervisor_agent(state)
 
     assert result["selected_agent"] == "general_agent"
+
+
+def test_supervisor_routes_interview_workflow_to_workflow_agent() -> None:
+    state = {
+        "user_message": "Prepare interview workflow for candidate 123",
+    }
+
+    result = supervisor_agent(state)
+
+    assert result["selected_agent"] == "workflow_agent"

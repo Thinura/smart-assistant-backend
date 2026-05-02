@@ -459,3 +459,258 @@ def detect_email_type(message: str) -> str:
         return "follow_up"
 
     return "general"
+
+
+def extract_uuids_from_text(text: str) -> list[UUID]:
+    uuids: list[UUID] = []
+
+    for token in text.replace(",", " ").replace(".", " ").split():
+        try:
+            uuids.append(UUID(token))
+        except ValueError:
+            continue
+
+    return uuids
+
+
+def extract_role_name(text: str) -> str | None:
+    normalized = text.lower()
+
+    known_roles = [
+        "qa intern",
+        "business analyst intern",
+        "software engineer",
+        "full stack engineer",
+        "frontend engineer",
+        "backend engineer",
+        "project manager intern",
+    ]
+
+    for role in known_roles:
+        if role in normalized:
+            return role.title()
+
+    return None
+
+
+def handle_interview_workflow(state: AgentState) -> AgentState:
+    db = state.get("db")
+
+    if db is None:
+        from app.db.session import SessionLocal
+
+        db = SessionLocal()
+        should_close_db = True
+    else:
+        should_close_db = False
+
+    try:
+        tool_execution_service = ToolExecutionService(db)
+        extracted_ids = extract_uuids_from_text(state["user_message"])
+
+        if not extracted_ids:
+            return {
+                **state,
+                "assistant_message": (
+                    "Please provide the candidate ID so I can prepare the interview workflow."
+                ),
+            }
+
+        candidate_id = extracted_ids[0]
+        job_description_document_id = extracted_ids[1] if len(extracted_ids) > 1 else None
+
+        template_variables = extract_email_template_variables(state["user_message"])
+
+        existing_tool_results = state.get("tool_results", [])
+
+        review_result, review_tool_call = tool_execution_service.run_tool(
+            tool_name="review_candidate",
+            payload={
+                "candidate_id": str(candidate_id),
+                "agent_run_id": str(state["agent_run_id"]) if state.get("agent_run_id") else None,
+            },
+            agent_run_id=state.get("agent_run_id"),
+        )
+
+        review_tool_result = {
+            "tool_name": "review_candidate",
+            "tool_call_id": str(review_tool_call.id),
+            "success": review_result.success,
+            "data": review_result.data,
+            "error": review_result.error,
+        }
+
+        if not review_result.success or review_result.data is None:
+            return {
+                **state,
+                "tool_results": [*existing_tool_results, review_tool_result],
+                "assistant_message": review_result.error or "Candidate review failed.",
+            }
+
+        workflow_tool_results = [*existing_tool_results, review_tool_result]
+
+        job_match_summary = "Job match skipped because no job description document ID was provided."
+        interview_kit_summary = (
+            "Interview kit skipped because no job description document ID was provided."
+        )
+
+        if job_description_document_id is not None:
+            match_result, match_tool_call = tool_execution_service.run_tool(
+                tool_name="match_candidate_to_job",
+                payload={
+                    "candidate_id": str(candidate_id),
+                    "job_description_document_id": str(job_description_document_id),
+                    "role_name": extract_role_name(state["user_message"]),
+                },
+                agent_run_id=state.get("agent_run_id"),
+            )
+
+            match_tool_result = {
+                "tool_name": "match_candidate_to_job",
+                "tool_call_id": str(match_tool_call.id),
+                "success": match_result.success,
+                "data": match_result.data,
+                "error": match_result.error,
+            }
+            workflow_tool_results.append(match_tool_result)
+
+            if match_result.success and match_result.data is not None:
+                job_match_summary = (
+                    f"Job match score: {match_result.data.get('match_score')}/100 "
+                    f"({match_result.data.get('recommendation')})"
+                )
+            else:
+                job_match_summary = match_result.error or "Job matching failed."
+
+            interview_kit_result, interview_kit_tool_call = tool_execution_service.run_tool(
+                tool_name="generate_interview_kit",
+                payload={
+                    "candidate_id": str(candidate_id),
+                    "job_description_document_id": str(job_description_document_id),
+                    "role_name": extract_role_name(state["user_message"]),
+                },
+                agent_run_id=state.get("agent_run_id"),
+            )
+
+            interview_kit_tool_result = {
+                "tool_name": "generate_interview_kit",
+                "tool_call_id": str(interview_kit_tool_call.id),
+                "success": interview_kit_result.success,
+                "data": interview_kit_result.data,
+                "error": interview_kit_result.error,
+            }
+            workflow_tool_results.append(interview_kit_tool_result)
+
+            if interview_kit_result.success and interview_kit_result.data is not None:
+                interview_kit_summary = (
+                    f"Interview kit created: {interview_kit_result.data.get('id')}"
+                )
+            else:
+                interview_kit_summary = (
+                    interview_kit_result.error or "Interview kit generation failed."
+                )
+
+        draft_result, draft_tool_call = tool_execution_service.run_tool(
+            tool_name="draft_candidate_email",
+            payload={
+                "candidate_id": str(candidate_id),
+                "email_type": "interview_invite",
+                "tone": "professional and kind",
+                "company_name": template_variables.get("company_name") or "Expernetic",
+                "recruiter_name": template_variables.get("recruiter_name") or "Thinura",
+                "interview_date": template_variables.get("interview_date") or "",
+                "interview_time": template_variables.get("interview_time") or "",
+                "interview_link": template_variables.get("interview_link") or "",
+            },
+            agent_run_id=state.get("agent_run_id"),
+        )
+
+        draft_tool_result = {
+            "tool_name": "draft_candidate_email",
+            "tool_call_id": str(draft_tool_call.id),
+            "success": draft_result.success,
+            "data": draft_result.data,
+            "error": draft_result.error,
+        }
+        workflow_tool_results.append(draft_tool_result)
+
+        if not draft_result.success or draft_result.data is None:
+            return {
+                **state,
+                "tool_results": workflow_tool_results,
+                "assistant_message": draft_result.error or "Email draft failed.",
+            }
+
+        candidate = draft_result.data["candidate"]
+        email = draft_result.data["email"]
+
+        approval_result, approval_tool_call = tool_execution_service.run_tool(
+            tool_name="create_approval_request",
+            payload={
+                "agent_run_id": str(state["agent_run_id"]) if state.get("agent_run_id") else None,
+                "action_type": "email_draft",
+                "title": f"Approve interview invite email for {candidate['full_name']}",
+                "description": (
+                    "Multi-step workflow prepared this interview invite. "
+                    "Human approval is required before sending."
+                ),
+                "action_payload": {
+                    "candidate_id": candidate["id"],
+                    "candidate_email": candidate["email"],
+                    "email_type": email["type"],
+                    "subject": email["subject"],
+                    "draft_body": email["body"],
+                    "source": "multi_step_interview_workflow",
+                },
+            },
+            agent_run_id=state.get("agent_run_id"),
+        )
+
+        approval_tool_result = {
+            "tool_name": "create_approval_request",
+            "tool_call_id": str(approval_tool_call.id),
+            "success": approval_result.success,
+            "data": approval_result.data,
+            "error": approval_result.error,
+        }
+        workflow_tool_results.append(approval_tool_result)
+
+        if not approval_result.success or approval_result.data is None:
+            return {
+                **state,
+                "tool_results": workflow_tool_results,
+                "assistant_message": (
+                    "Candidate review and email draft completed, but approval creation failed."
+                ),
+            }
+
+        review = review_result.data["review"]
+        approval_request_id = approval_result.data["approval_request_id"]
+
+        assistant_message = (
+            "Interview workflow prepared successfully.\n\n"
+            f"Candidate: {candidate['full_name']}\n"
+            f"Review Score: {review['score']}/100\n"
+            f"Recommendation: {review['recommendation']}\n"
+            f"{job_match_summary}\n"
+            f"{interview_kit_summary}\n\n"
+            f"Approval Request ID: {approval_request_id}\n"
+            f"Email Subject: {email['subject']}\n\n"
+            "Next step: review and approve the generated email before sending."
+        )
+
+        return {
+            **state,
+            "tool_results": workflow_tool_results,
+            "sources": [
+                {
+                    "candidate_id": candidate["id"],
+                    "source": "multi_step_interview_workflow",
+                }
+            ],
+            "assistant_message": assistant_message,
+        }
+
+    finally:
+        if should_close_db:
+            db.close()

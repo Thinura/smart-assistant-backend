@@ -8,6 +8,8 @@ from app.tools.candidate_tools import ReviewCandidateTool
 from app.tools.conversation_tools import ConversationSummaryTool
 from app.tools.document_tools import SearchDocumentsTool
 from app.tools.email_tools import DraftCandidateEmailTool
+from app.tools.interview_kit_tools import GenerateInterviewKitTool
+from app.tools.job_match_tools import MatchCandidateToJobTool
 
 
 class ToolRegistry:
@@ -25,6 +27,8 @@ class ToolRegistry:
             ReviewCandidateTool.name: ReviewCandidateTool(db),
             CreateApprovalRequestTool.name: CreateApprovalRequestTool(db),
             DraftCandidateEmailTool.name: DraftCandidateEmailTool(db),
+            MatchCandidateToJobTool.name: MatchCandidateToJobTool(db),
+            GenerateInterviewKitTool.name: GenerateInterviewKitTool(db),
         }
 
     def get(self, name: str, db: Session | None = None) -> BaseTool | None:

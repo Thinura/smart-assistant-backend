@@ -7,6 +7,17 @@ def supervisor_agent(state: AgentState) -> AgentState:
     if any(
         phrase in message
         for phrase in [
+            "prepare interview workflow",
+            "run interview workflow",
+            "candidate interview workflow",
+            "full interview workflow",
+        ]
+    ):
+        selected_agent = "workflow_agent"
+
+    elif any(
+        phrase in message
+        for phrase in [
             "review candidate",
             "candidate review",
             "evaluate candidate",
