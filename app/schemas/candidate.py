@@ -13,8 +13,29 @@ from app.models.candidate_review import (
     CandidateReviewConfidence,
     CandidateReviewRecommendation,
 )
+from app.models.candidate_workflow import CandidateWorkflowStatus, CandidateWorkflowType
 from app.models.interview_kit import InterviewKitStatus
 from app.models.outbox_message import OutboxMessageStatus
+
+
+class CandidateTimelineWorkflowResponse(BaseModel):
+    id: UUID
+    candidate_id: UUID
+    agent_run_id: UUID | None
+    workflow_type: CandidateWorkflowType
+    status: CandidateWorkflowStatus
+    role_name: str | None
+    candidate_review_id: UUID | None
+    candidate_job_match_id: UUID | None
+    interview_kit_id: UUID | None
+    approval_request_id: UUID | None
+    score: int | None
+    recommendation: str | None
+    summary: str | None
+    workflow_metadata: dict[str, Any]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CandidateTimelineInterviewKitResponse(BaseModel):
@@ -146,6 +167,8 @@ class CandidateTimelineSummary(BaseModel):
     latest_job_match_recommendation: CandidateJobMatchRecommendation | None
     interview_kit_count: int
     latest_interview_kit_id: UUID | None
+    candidate_workflow_count: int
+    latest_candidate_workflow_id: UUID | None
 
 
 class CandidateTimelineOutboxMessageResponse(BaseModel):
@@ -214,3 +237,4 @@ class CandidateTimelineResponse(BaseModel):
     candidate_reviews: list[CandidateTimelineReviewResponse]
     job_matches: list[CandidateTimelineJobMatchResponse]
     interview_kits: list[CandidateTimelineInterviewKitResponse]
+    candidate_workflows: list[CandidateTimelineWorkflowResponse]

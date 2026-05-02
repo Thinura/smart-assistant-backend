@@ -9,6 +9,7 @@ from app.models.audit_log import AuditEventType, AuditLog
 from app.models.candidate import Candidate, CandidateStatus
 from app.models.candidate_job_match import CandidateJobMatch
 from app.models.candidate_review import CandidateReview
+from app.models.candidate_workflow import CandidateWorkflow
 from app.models.document import Document, DocumentType
 from app.models.interview_kit import InterviewKit
 from app.models.outbox_message import OutboxMessage, OutboxMessageStatus
@@ -351,6 +352,15 @@ def get_candidate_timeline(
 
     latest_interview_kit = interview_kits[0] if interview_kits else None
 
+    candidate_workflows = (
+        db.query(CandidateWorkflow)
+        .filter(CandidateWorkflow.candidate_id == candidate.id)
+        .order_by(CandidateWorkflow.created_at.desc())
+        .all()
+    )
+
+    latest_candidate_workflow = candidate_workflows[0] if candidate_workflows else None
+
     summary = CandidateTimelineSummary(
         candidate_id=candidate.id,
         has_cv=candidate.cv_document_id is not None,
@@ -378,6 +388,10 @@ def get_candidate_timeline(
         ),
         interview_kit_count=len(interview_kits),
         latest_interview_kit_id=latest_interview_kit.id if latest_interview_kit else None,
+        candidate_workflow_count=len(candidate_workflows),
+        latest_candidate_workflow_id=(
+            latest_candidate_workflow.id if latest_candidate_workflow else None
+        ),
     )
 
     return CandidateTimelineResponse(
@@ -391,6 +405,7 @@ def get_candidate_timeline(
         candidate_reviews=candidate_reviews,
         job_matches=job_matches,
         interview_kits=interview_kits,
+        candidate_workflows=candidate_workflows,
     )
 
 
